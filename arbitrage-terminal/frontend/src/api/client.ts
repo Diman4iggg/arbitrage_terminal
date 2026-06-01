@@ -4,6 +4,7 @@ import type {
   DashboardData,
   Exchange,
   Opportunity,
+  NotificationTestResult,
   PriceChart,
   RuntimeSettings,
   SpreadChart,
@@ -35,4 +36,6 @@ export const terminalApi = {
     (await api.get<SpreadChart>("/charts/spreads", { params: { symbol, minutes } })).data,
   getTopSpreads: async (minutes = 30) =>
     (await api.get<TopSpread[]>("/charts/top-spreads", { params: { minutes } })).data,
+  testTelegram: async () =>
+    (await api.post<NotificationTestResult>("/notifications/test-telegram")).data,
 }

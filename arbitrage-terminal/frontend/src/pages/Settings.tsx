@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import axios from "axios"
 import { useEffect, useState } from "react"
 
 import { terminalApi } from "../api/client"
@@ -12,7 +13,7 @@ export function Settings() {
   const pairs = useQuery({ queryKey: ["pairs"], queryFn: terminalApi.getPairs })
   const exchanges = useQuery({ queryKey: ["exchanges"], queryFn: terminalApi.getExchanges })
   const [form, setForm] = useState<RuntimeSettings | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [toast, setToast] = useState<{ tone: "success" | "danger"; message: string } | null>(null)
 
   useEffect(() => { if (settings.data) setForm(settings.data) }, [settings.data])
 
@@ -20,9 +21,16 @@ export function Settings() {
     mutationFn: terminalApi.updateSettings,
     onSuccess: (data) => {
       setForm(data)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
+      showToast("success", "Settings saved successfully.")
       queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+  })
+  const testTelegram = useMutation({
+    mutationFn: terminalApi.testTelegram,
+    onSuccess: (data) => showToast("success", data.message),
+    onError: (error) => {
+      const detail = axios.isAxiosError(error) ? error.response?.data?.detail : null
+      showToast("danger", detail ?? "Unable to send Telegram test notification.")
     },
   })
   const updatePair = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updatePair(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pairs"] }) })
@@ -30,10 +38,15 @@ export function Settings() {
 
   if (!form || settings.isLoading) return <Skeleton className="h-96" />
 
+  function showToast(tone: "success" | "danger", message: string) {
+    setToast({ tone, message })
+    setTimeout(() => setToast(null), 3500)
+  }
+
   return (
     <>
       <PageHeader title="Settings" description="Runtime monitoring configuration. Changes are applied without restarting the backend." actions={<Button onClick={() => save.mutate(form)} disabled={save.isPending}>{save.isPending ? "Saving..." : "Save settings"}</Button>} />
-      {saved && <div role="status" className="fixed right-5 top-20 z-30 rounded-md border border-emerald-500/30 bg-terminal-900 px-4 py-3 text-xs text-emerald-300 shadow-xl">Settings saved successfully.</div>}
+      {toast && <div role="status" className={`fixed right-5 top-20 z-30 rounded-md border bg-terminal-900 px-4 py-3 text-xs shadow-xl ${toast.tone === "success" ? "border-emerald-500/30 text-emerald-300" : "border-rose-500/30 text-rose-300"}`}>{toast.message}</div>}
       <div className="grid gap-4 xl:grid-cols-2">
         <SettingsCard title="Monitoring">
           <Field label="Default spread threshold %"><Input type="number" min="0" step="0.1" value={form.default_spread_threshold_percent} onChange={(e) => setForm({ ...form, default_spread_threshold_percent: Number(e.target.value) })} /></Field>
@@ -43,7 +56,8 @@ export function Settings() {
         <SettingsCard title="Telegram notifications">
           <ToggleRow label="Enable Telegram alerts" checked={form.telegram_notifications_enabled} onChange={(value) => setForm({ ...form, telegram_notifications_enabled: value })} />
           <Field label="Telegram chat ID"><Input value={form.telegram_chat_id} onChange={(e) => setForm({ ...form, telegram_chat_id: e.target.value })} placeholder="Configured in Stage 6" /></Field>
-          <p className="text-xs leading-5 text-zinc-500">Telegram delivery and the test button are connected in Stage 6. No exchange private keys are required.</p>
+          <Button onClick={() => testTelegram.mutate()} disabled={testTelegram.isPending}>{testTelegram.isPending ? "Sending..." : "Send test notification"}</Button>
+          <p className="text-xs leading-5 text-zinc-500">The bot token is loaded from the backend environment. No exchange private keys are required.</p>
         </SettingsCard>
         <SettingsCard title="Enabled exchanges">
           {exchanges.data?.map((item) => <ToggleRow key={item.id} label={item.name} checked={item.enabled} onChange={(enabled) => updateExchange.mutate({ id: item.id, enabled })} />)}

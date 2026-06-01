@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import NotificationLog
 from app.notifications.base import NotificationSender
 from app.schemas.opportunity import Opportunity
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -27,7 +30,17 @@ class NotificationService:
             opportunity_key = self.build_opportunity_key(opportunity)
             if await self._is_in_cooldown(opportunity_key, cooldown_seconds):
                 continue
-            if await self.sender.send_opportunity(opportunity):
+            try:
+                delivered = await self.sender.send_opportunity(opportunity)
+            except Exception as error:  # noqa: BLE001 - notifications must not stop monitoring
+                logger.error(
+                    "Failed to send %s notification for %s: %s",
+                    self.sender.channel,
+                    opportunity_key,
+                    str(error) or error.__class__.__name__,
+                )
+                continue
+            if delivered:
                 self.session.add(
                     NotificationLog(
                         opportunity_key=opportunity_key,

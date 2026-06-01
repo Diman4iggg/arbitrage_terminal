@@ -97,3 +97,8 @@ export interface TopSpread {
   spread_percent: string
   detected_at: string
 }
+
+export interface NotificationTestResult {
+  delivered: boolean
+  message: string
+}

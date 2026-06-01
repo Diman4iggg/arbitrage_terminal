@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.db.database import async_session_factory
 from app.db.models import Exchange, MarketType, TradingPair
 from app.exchanges.base import ExchangeAdapter
-from app.notifications.base import NullNotificationSender
+from app.notifications.telegram import TelegramSender
 from app.services.arbitrage_service import ArbitrageService
 from app.services.market_data_service import MarketDataService
 from app.services.monitoring_state import MonitoringState, monitoring_state
@@ -57,14 +57,21 @@ class MonitoringService:
                     persist_snapshots=settings.persist_price_snapshots,
                     snapshot_retention_hours=settings.price_snapshot_retention_hours,
                 )
-                await NotificationService(
-                    session=session,
-                    sender=NullNotificationSender(),
-                ).notify_opportunities(
-                    opportunities=opportunities,
-                    cooldown_seconds=runtime_settings.notification_cooldown_seconds,
-                    enabled=runtime_settings.telegram_notifications_enabled,
+                telegram_sender = TelegramSender(
+                    bot_token=settings.telegram_bot_token,
+                    chat_id=runtime_settings.telegram_chat_id or settings.telegram_chat_id,
                 )
+                try:
+                    await NotificationService(
+                        session=session,
+                        sender=telegram_sender,
+                    ).notify_opportunities(
+                        opportunities=opportunities,
+                        cooldown_seconds=runtime_settings.notification_cooldown_seconds,
+                        enabled=runtime_settings.telegram_notifications_enabled,
+                    )
+                finally:
+                    await telegram_sender.close()
                 self.state.tickers = market_data.tickers
                 self.state.opportunities = opportunities
                 self.state.errors = market_data.errors
