@@ -30,3 +30,9 @@ class ExchangeStatusRead(BaseModel):
     last_error_at: datetime | None
     last_error_message: str | None
 
+
+class ExchangeWithStatusRead(ExchangeRead):
+    status: ExchangeHealth = ExchangeHealth.UNKNOWN
+    last_success_at: datetime | None = None
+    last_error_at: datetime | None = None
+    last_error_message: str | None = None

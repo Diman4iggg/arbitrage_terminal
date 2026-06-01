@@ -94,12 +94,14 @@ class PersistenceService:
             if exchange_name in successful_exchanges:
                 status.last_success_at = now
             if exchange_errors:
-                status.status = ExchangeHealth.ERROR
                 status.last_error_at = now
                 status.last_error_message = "; ".join(exchange_errors)[:2000]
-            elif exchange_name in successful_exchanges:
+            if exchange_name in successful_exchanges:
                 status.status = ExchangeHealth.ONLINE
-                status.last_error_message = None
+                if not exchange_errors:
+                    status.last_error_message = None
+            elif exchange_errors:
+                status.status = ExchangeHealth.ERROR
             else:
                 status.status = ExchangeHealth.OFFLINE
 

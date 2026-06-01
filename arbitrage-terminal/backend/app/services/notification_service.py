@@ -61,4 +61,3 @@ class NotificationService:
         return ":".join(
             (opportunity.symbol, opportunity.buy_exchange, opportunity.sell_exchange)
         )
-

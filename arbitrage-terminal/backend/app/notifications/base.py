@@ -15,4 +15,3 @@ class NullNotificationSender:
 
     async def send_opportunity(self, opportunity: Opportunity) -> bool:
         return False
-
