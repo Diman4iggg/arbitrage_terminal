@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -20,6 +21,7 @@ class CcxtPerpetualAdapter(ExchangeAdapter):
         exchange_class = getattr(ccxt, self.exchange_id)
         self.client = exchange_class(self._client_config())
         self._markets_loaded = False
+        self._markets_lock = asyncio.Lock()
 
     def _client_config(self) -> dict[str, Any]:
         return {
@@ -28,9 +30,12 @@ class CcxtPerpetualAdapter(ExchangeAdapter):
         }
 
     async def _ensure_markets(self) -> None:
-        if not self._markets_loaded:
-            await self.client.load_markets()
-            self._markets_loaded = True
+        if self._markets_loaded:
+            return
+        async with self._markets_lock:
+            if not self._markets_loaded:
+                await self.client.load_markets()
+                self._markets_loaded = True
 
     async def _resolve_symbol(self, symbol: str) -> str:
         await self._ensure_markets()

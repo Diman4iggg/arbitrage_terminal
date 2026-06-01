@@ -1,2 +1,5 @@
-"""Notification integrations are implemented in Stage 6."""
+"""Notification sender contracts and integrations."""
 
+from app.notifications.base import NotificationSender, NullNotificationSender
+
+__all__ = ["NotificationSender", "NullNotificationSender"]

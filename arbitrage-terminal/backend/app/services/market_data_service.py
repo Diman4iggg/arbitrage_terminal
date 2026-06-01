@@ -45,6 +45,11 @@ class MarketDataService:
         try:
             return adapter.name, symbol, await adapter.get_ticker(symbol), None
         except Exception as error:  # noqa: BLE001 - one failed exchange must not stop a cycle
-            logger.warning("Failed to fetch %s ticker from %s: %s", symbol, adapter.name, error)
-            return adapter.name, symbol, None, str(error)
-
+            error_message = str(error) or error.__class__.__name__
+            logger.warning(
+                "Failed to fetch %s ticker from %s: %s",
+                symbol,
+                adapter.name,
+                error_message,
+            )
+            return adapter.name, symbol, None, error_message

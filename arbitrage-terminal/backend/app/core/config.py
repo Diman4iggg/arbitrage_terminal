@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     market_type: str = "perpetual"
+    scheduler_enabled: bool = True
     monitoring_interval_seconds: int = 10
+    persist_price_snapshots: bool = True
+    price_snapshot_retention_hours: int = 24
     default_spread_threshold_percent: float = 0.5
     notification_cooldown_seconds: int = 300
 
@@ -40,4 +43,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
