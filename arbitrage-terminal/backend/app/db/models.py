@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, JSON, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -92,6 +92,9 @@ class ArbitrageOpportunity(Base):
     buy_price: Mapped[Decimal] = mapped_column(Numeric(30, 12), nullable=False)
     sell_price: Mapped[Decimal] = mapped_column(Numeric(30, 12), nullable=False)
     spread_percent: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    buy_funding_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    sell_funding_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    funding_spread_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -149,3 +152,48 @@ class PriceSnapshot(Base):
     last_price: Mapped[Decimal] = mapped_column(Numeric(30, 12), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+
+class TradeWatch(TimestampMixin, Base):
+    __tablename__ = "trade_watches"
+    __table_args__ = (
+        Index("ix_trade_watches_symbol_exchanges", "symbol", "buy_exchange", "sell_exchange"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(50), nullable=False)
+    buy_exchange: Mapped[str] = mapped_column(String(50), nullable=False)
+    sell_exchange: Mapped[str] = mapped_column(String(50), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    buy_entry_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    sell_entry_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    position_size_coins: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    price_alert_threshold_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    funding_alert_threshold_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    buy_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    sell_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    price_spread_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    buy_funding_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    sell_funding_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    funding_spread_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    pnl_usdt: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    pnl_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    last_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class TradeWatchSpreadSnapshot(Base):
+    __tablename__ = "trade_watch_spread_snapshots"
+    __table_args__ = (
+        Index("ix_trade_watch_spread_snapshots_watch_timestamp", "trade_watch_id", "timestamp"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trade_watch_id: Mapped[int] = mapped_column(
+        ForeignKey("trade_watches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    spread_percent: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

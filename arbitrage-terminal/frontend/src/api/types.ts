@@ -20,6 +20,9 @@ export interface Opportunity {
   buy_price: string
   sell_price: string
   spread_percent: string
+  buy_funding_rate_percent: string | null
+  sell_funding_rate_percent: string | null
+  funding_spread_percent: string | null
   detected_at: string
   status: OpportunityStatus
 }
@@ -101,4 +104,62 @@ export interface TopSpread {
 export interface NotificationTestResult {
   delivered: boolean
   message: string
+}
+
+export interface TradeWatch {
+  id: number
+  symbol: string
+  buy_exchange: string
+  sell_exchange: string
+  enabled: boolean
+  notifications_enabled: boolean
+  buy_entry_price: string | null
+  sell_entry_price: string | null
+  position_size_coins: string | null
+  entry_spread_percent: string | null
+  price_alert_threshold_percent: string | null
+  funding_alert_threshold_percent: string | null
+  buy_price: string | null
+  sell_price: string | null
+  price_spread_percent: string | null
+  buy_funding_rate_percent: string | null
+  sell_funding_rate_percent: string | null
+  funding_spread_percent: string | null
+  pnl_usdt: string | null
+  pnl_percent: string | null
+  last_updated_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TradeWatchCreate {
+  symbol: string
+  buy_exchange: string
+  sell_exchange: string
+  notifications_enabled: boolean
+  buy_entry_price: number
+  sell_entry_price: number
+  position_size_coins: number
+  price_alert_threshold_percent: number | null
+  funding_alert_threshold_percent: number | null
+}
+
+export interface TradeWatchUpdate {
+  enabled?: boolean
+  notifications_enabled?: boolean
+  position_size_coins?: number
+  price_alert_threshold_percent?: number | null
+  funding_alert_threshold_percent?: number | null
+}
+
+export interface TradeWatchSpreadHistory {
+  trade_watch_id: number
+  symbol: string
+  buy_exchange: string
+  sell_exchange: string
+  points: Array<{
+    timestamp: string
+    spread_percent: string
+  }>
 }

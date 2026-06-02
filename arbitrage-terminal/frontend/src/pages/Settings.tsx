@@ -13,6 +13,8 @@ export function Settings() {
   const pairs = useQuery({ queryKey: ["pairs"], queryFn: terminalApi.getPairs })
   const exchanges = useQuery({ queryKey: ["exchanges"], queryFn: terminalApi.getExchanges })
   const [form, setForm] = useState<RuntimeSettings | null>(null)
+  const [newPair, setNewPair] = useState("")
+  const [pairSearch, setPairSearch] = useState("")
   const [toast, setToast] = useState<{ tone: "success" | "danger"; message: string } | null>(null)
 
   useEffect(() => { if (settings.data) setForm(settings.data) }, [settings.data])
@@ -43,9 +45,22 @@ export function Settings() {
     onError: () => showToast("danger", "Unable to update Telegram alert state."),
   })
   const updatePair = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updatePair(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pairs"] }) })
+  const createPair = useMutation({
+    mutationFn: terminalApi.createPair,
+    onSuccess: () => {
+      setNewPair("")
+      showToast("success", "Perpetual pair added and enabled.")
+      queryClient.invalidateQueries({ queryKey: ["pairs"] })
+    },
+    onError: (error) => {
+      const detail = axios.isAxiosError(error) ? error.response?.data?.detail : null
+      showToast("danger", detail ?? "Unable to add perpetual pair.")
+    },
+  })
   const updateExchange = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updateExchange(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["exchanges"] }) })
 
   if (!form || settings.isLoading) return <Skeleton className="h-96" />
+  const filteredPairs = pairs.data?.filter((item) => item.symbol.toLowerCase().includes(pairSearch.trim().toLowerCase()))
 
   function showToast(tone: "success" | "danger", message: string) {
     setToast({ tone, message })
@@ -81,7 +96,13 @@ export function Settings() {
           {exchanges.data?.map((item) => <ToggleRow key={item.id} label={item.name} checked={item.enabled} onChange={(enabled) => updateExchange.mutate({ id: item.id, enabled })} />)}
         </SettingsCard>
         <SettingsCard title="Tracked perpetual pairs">
-          {pairs.data?.map((item) => <ToggleRow key={item.id} label={item.symbol} checked={item.enabled} onChange={(enabled) => updatePair.mutate({ id: item.id, enabled })} />)}
+          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); createPair.mutate(newPair) }}>
+            <Input value={newPair} onChange={(event) => setNewPair(event.target.value)} placeholder="Add coin, e.g. SEI or TAO/USDT" required />
+            <Button type="submit" disabled={createPair.isPending}>{createPair.isPending ? "Adding..." : "Add pair"}</Button>
+          </form>
+          <p className="text-xs leading-5 text-zinc-500">Add any USDT perpetual symbol. Unsupported markets are skipped per exchange without stopping monitoring.</p>
+          <Input value={pairSearch} onChange={(event) => setPairSearch(event.target.value)} placeholder="Search existing pairs, e.g. BTC or PEPE" />
+          {filteredPairs?.length ? filteredPairs.map((item) => <ToggleRow key={item.id} label={item.symbol} checked={item.enabled} onChange={(enabled) => updatePair.mutate({ id: item.id, enabled })} />) : <p className="py-3 text-center text-xs text-zinc-500">No matching pairs.</p>}
         </SettingsCard>
       </div>
     </>

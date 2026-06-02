@@ -8,6 +8,7 @@ from app.api.routes.notifications import router as notifications_router
 from app.api.routes.opportunities import router as opportunities_router
 from app.api.routes.pairs import router as pairs_router
 from app.api.routes.settings import router as settings_router
+from app.api.routes.trade_watches import router as trade_watches_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -18,3 +19,4 @@ api_router.include_router(opportunities_router)
 api_router.include_router(settings_router)
 api_router.include_router(charts_router)
 api_router.include_router(notifications_router)
+api_router.include_router(trade_watches_router)

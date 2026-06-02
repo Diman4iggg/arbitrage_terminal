@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.db.models import MarketType
 
@@ -21,3 +21,16 @@ class TradingPairRead(BaseModel):
 class TradingPairUpdate(BaseModel):
     enabled: bool
 
+
+class TradingPairCreate(BaseModel):
+    symbol: str
+
+    @field_validator("symbol")
+    @classmethod
+    def normalize_symbol(cls, value: str) -> str:
+        symbol = value.strip().upper()
+        normalized_symbol = symbol if "/" in symbol else f"{symbol}/USDT"
+        base_asset, quote_asset = normalized_symbol.split("/", maxsplit=1)
+        if not base_asset or quote_asset != "USDT":
+            raise ValueError("Perpetual monitoring pairs must use a base asset and the USDT quote")
+        return normalized_symbol

@@ -6,6 +6,7 @@ import { Dashboard } from "./pages/Dashboard"
 import { Exchanges } from "./pages/Exchanges"
 import { Opportunities } from "./pages/Opportunities"
 import { Settings } from "./pages/Settings"
+import { MyTrades } from "./pages/MyTrades"
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/opportunities" element={<Opportunities />} />
+        <Route path="/my-trades" element={<MyTrades />} />
         <Route path="/exchanges" element={<Exchanges />} />
         <Route path="/charts" element={<Charts />} />
         <Route path="/settings" element={<Settings />} />

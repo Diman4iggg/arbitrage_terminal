@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import httpx
 
+from app.db.models import TradeWatch
 from app.schemas.opportunity import Opportunity
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,9 @@ class TelegramSender:
 
     async def send_opportunity(self, opportunity: Opportunity) -> bool:
         return await self.send_message(format_opportunity_message(opportunity))
+
+    async def send_trade_watch(self, trade_watch: TradeWatch, reasons: list[str]) -> bool:
+        return await self.send_message(format_trade_watch_message(trade_watch, reasons))
 
     async def send_test_message(self) -> bool:
         detected_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -89,10 +93,49 @@ def format_opportunity_message(opportunity: Opportunity) -> str:
         f"Sell: <b>{html.escape(opportunity.sell_exchange)}</b> at "
         f"<code>{_format_decimal(opportunity.sell_price)}</code>\n"
         f"Spread: <b>{opportunity.spread_percent:.2f}%</b>\n"
+        f"Funding: <code>{_format_optional_percent(opportunity.buy_funding_rate_percent)}</code> "
+        f"-> <code>{_format_optional_percent(opportunity.sell_funding_rate_percent)}</code>\n"
+        f"Funding delta: <b>{_format_optional_percent(opportunity.funding_spread_percent)}</b>\n"
         f"Detected at: <code>{detected_at}</code>"
+    )
+
+
+def format_trade_watch_message(trade_watch: TradeWatch, reasons: list[str]) -> str:
+    detected_at = (trade_watch.last_updated_at or datetime.now(UTC)).astimezone(UTC)
+    reason_text = ", ".join(reason.replace("_", " ") for reason in reasons)
+    return (
+        "<b>My Trades alert</b>\n\n"
+        f"Pair: <code>{html.escape(trade_watch.symbol)} PERP</code>\n"
+        f"Direction: <b>{html.escape(trade_watch.buy_exchange)}</b> -> "
+        f"<b>{html.escape(trade_watch.sell_exchange)}</b>\n"
+        f"Entry spread: <b>{_format_optional_percent(_entry_spread_percent(trade_watch))}</b>\n"
+        f"Price spread: <b>{_format_optional_percent(trade_watch.price_spread_percent)}</b>\n"
+        f"Funding spread: <b>{_format_optional_percent(trade_watch.funding_spread_percent)}</b>\n"
+        f"Position PnL: <b>{_format_optional_decimal(trade_watch.pnl_usdt)} USDT</b> "
+        f"({_format_optional_percent(trade_watch.pnl_percent)})\n"
+        f"Triggered by: <code>{html.escape(reason_text)}</code>\n"
+        f"Detected at: <code>{detected_at.strftime('%Y-%m-%d %H:%M:%S UTC')}</code>"
     )
 
 
 def _format_decimal(value: Decimal) -> str:
     formatted = f"{value:f}"
     return formatted.rstrip("0").rstrip(".") if "." in formatted else formatted
+
+
+def _format_optional_percent(value: Decimal | None) -> str:
+    return "n/a" if value is None else f"{value:.4f}%"
+
+
+def _format_optional_decimal(value: Decimal | None) -> str:
+    return "n/a" if value is None else f"{value:.4f}"
+
+
+def _entry_spread_percent(trade_watch: TradeWatch) -> Decimal | None:
+    if trade_watch.buy_entry_price is None or trade_watch.sell_entry_price is None:
+        return None
+    return (
+        (trade_watch.sell_entry_price - trade_watch.buy_entry_price)
+        / trade_watch.buy_entry_price
+        * Decimal("100")
+    )

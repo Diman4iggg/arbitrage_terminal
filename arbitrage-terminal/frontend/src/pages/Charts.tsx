@@ -7,7 +7,7 @@ import { PageHeader } from "../components/PageHeader"
 import { Card, CardContent, CardHeader, Select, Skeleton } from "../components/ui"
 import { formatSpread } from "../lib/format"
 
-const colors: Record<string, string> = { Binance: "#34d399", Bybit: "#60a5fa", MEXC: "#f59e0b", Hyperliquid: "#c084fc" }
+const colors: Record<string, string> = { Binance: "#34d399", Bybit: "#60a5fa", MEXC: "#f59e0b", Hyperliquid: "#c084fc", Aster: "#fb7185", "Variational Omni": "#22d3ee", BingX: "#a3e635", Bitget: "#f472b6", OKX: "#e4e4e7", "Gate.io": "#f97316" }
 
 export function Charts() {
   const [symbol, setSymbol] = useState("BTC/USDT")

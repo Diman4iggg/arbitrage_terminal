@@ -14,8 +14,10 @@ from app.services.arbitrage_service import ArbitrageService
 from app.services.market_data_service import MarketDataService
 from app.services.monitoring_state import MonitoringState, monitoring_state
 from app.services.notification_service import NotificationService
+from app.services.opportunity_funding_service import OpportunityFundingService
 from app.services.persistence_service import PersistenceService
 from app.services.settings_service import SettingsService
+from app.services.trade_watch_service import TradeWatchService
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ class MonitoringService:
                         for symbol, threshold in runtime_settings.threshold_per_pair.items()
                     },
                 )
+                await OpportunityFundingService(self.adapters).enrich(opportunities)
                 await PersistenceService(session).save_market_cycle(
                     tickers=market_data.tickers,
                     opportunities=opportunities,
@@ -62,13 +65,22 @@ class MonitoringService:
                     chat_id=runtime_settings.telegram_chat_id or settings.telegram_chat_id,
                 )
                 try:
-                    await NotificationService(
+                    notification_service = NotificationService(
                         session=session,
                         sender=telegram_sender,
-                    ).notify_opportunities(
+                    )
+                    await notification_service.notify_opportunities(
                         opportunities=opportunities,
                         cooldown_seconds=runtime_settings.notification_cooldown_seconds,
                         enabled=runtime_settings.telegram_notifications_enabled,
+                    )
+                    await TradeWatchService(
+                        session=session,
+                        adapters=self.adapters,
+                        sender=telegram_sender,
+                    ).refresh_all(
+                        telegram_enabled=runtime_settings.telegram_notifications_enabled,
+                        cooldown_seconds=runtime_settings.notification_cooldown_seconds,
                     )
                 finally:
                     await telegram_sender.close()

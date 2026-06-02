@@ -8,9 +8,9 @@ export function OpportunityTable({ opportunities }: { opportunities: Opportunity
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px] text-left text-xs">
+      <table className="w-full min-w-[1160px] text-left text-xs">
         <thead className="border-b border-terminal-700 bg-terminal-950/50 text-[10px] uppercase tracking-wider text-zinc-500">
-          <tr>{["Pair", "Market", "Buy exchange", "Sell exchange", "Buy price", "Sell price", "Spread", "Detected", "Status"].map((item) => <th key={item} className="px-4 py-3 font-medium">{item}</th>)}</tr>
+          <tr>{["Pair", "Market", "Buy exchange", "Sell exchange", "Buy price", "Sell price", "Spread", "Buy funding", "Sell funding", "Funding delta", "Detected", "Status"].map((item) => <th key={item} className="px-4 py-3 font-medium">{item}</th>)}</tr>
         </thead>
         <tbody>
           {opportunities.map((item) => (
@@ -22,6 +22,9 @@ export function OpportunityTable({ opportunities }: { opportunities: Opportunity
               <td className="px-4 py-3 font-mono">{formatPrice(item.buy_price)}</td>
               <td className="px-4 py-3 font-mono">{formatPrice(item.sell_price)}</td>
               <td className="px-4 py-3 font-mono font-semibold text-emerald-300">{formatSpread(item.spread_percent)}</td>
+              <td className="px-4 py-3 font-mono">{formatOptionalSpread(item.buy_funding_rate_percent)}</td>
+              <td className="px-4 py-3 font-mono">{formatOptionalSpread(item.sell_funding_rate_percent)}</td>
+              <td className="px-4 py-3 font-mono font-semibold text-cyan-300">{formatOptionalSpread(item.funding_spread_percent)}</td>
               <td className="px-4 py-3 text-zinc-500">{formatDate(item.detected_at)}</td>
               <td className="px-4 py-3"><Badge tone={item.status === "active" ? "success" : "neutral"}>{item.status}</Badge></td>
             </tr>
@@ -30,4 +33,8 @@ export function OpportunityTable({ opportunities }: { opportunities: Opportunity
       </table>
     </div>
   )
+}
+
+function formatOptionalSpread(value: string | null) {
+  return value === null ? "n/a" : formatSpread(value)
 }

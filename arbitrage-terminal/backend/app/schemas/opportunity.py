@@ -14,6 +14,9 @@ class Opportunity(BaseModel):
     buy_price: Decimal
     sell_price: Decimal
     spread_percent: Decimal
+    buy_funding_rate_percent: Decimal | None = None
+    sell_funding_rate_percent: Decimal | None = None
+    funding_spread_percent: Decimal | None = None
     detected_at: datetime
     status: OpportunityStatus = OpportunityStatus.ACTIVE
 
@@ -22,4 +25,3 @@ class OpportunityRead(Opportunity):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-

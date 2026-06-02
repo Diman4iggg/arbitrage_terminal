@@ -69,6 +69,9 @@ class PersistenceService:
                 buy_price=opportunity.buy_price,
                 sell_price=opportunity.sell_price,
                 spread_percent=opportunity.spread_percent,
+                buy_funding_rate_percent=opportunity.buy_funding_rate_percent,
+                sell_funding_rate_percent=opportunity.sell_funding_rate_percent,
+                funding_spread_percent=opportunity.funding_spread_percent,
                 detected_at=opportunity.detected_at,
                 status=opportunity.status,
             )

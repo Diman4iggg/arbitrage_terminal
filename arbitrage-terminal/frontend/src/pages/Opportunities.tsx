@@ -14,6 +14,7 @@ export function Opportunities() {
     queryKey: ["opportunities", symbol, exchange, minSpread],
     queryFn: () => terminalApi.getOpportunities({ ...(symbol && { symbol }), ...(exchange && { exchange }), min_spread: minSpread || 0 }),
   })
+  const exchanges = useQuery({ queryKey: ["exchanges"], queryFn: terminalApi.getExchanges })
 
   return (
     <>
@@ -23,7 +24,7 @@ export function Opportunities() {
           <Input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder="Filter symbol, e.g. BTC or BNB" />
           <Select value={exchange} onChange={(event) => setExchange(event.target.value)}>
             <option value="">All exchanges</option>
-            {["Binance", "Bybit", "MEXC", "Hyperliquid"].map((item) => <option key={item}>{item}</option>)}
+            {exchanges.data?.map((item) => <option key={item.id}>{item.name}</option>)}
           </Select>
           <Input value={minSpread} onChange={(event) => setMinSpread(event.target.value)} type="number" min="0" step="0.1" placeholder="Minimum spread %" />
         </div>

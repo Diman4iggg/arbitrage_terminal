@@ -1,4 +1,4 @@
-import { Activity, BarChart3, CandlestickChart, RadioTower, Settings, WalletCards } from "lucide-react"
+import { Activity, BarChart3, CandlestickChart, RadioTower, Settings, SquareChartGantt, WalletCards } from "lucide-react"
 import type { ReactNode } from "react"
 import { NavLink } from "react-router-dom"
 
@@ -7,6 +7,7 @@ import { cn } from "./ui"
 const navItems = [
   { to: "/", label: "Dashboard", icon: Activity },
   { to: "/opportunities", label: "Opportunities", icon: CandlestickChart },
+  { to: "/my-trades", label: "My Trades", icon: SquareChartGantt },
   { to: "/exchanges", label: "Exchanges", icon: WalletCards },
   { to: "/charts", label: "Charts", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
