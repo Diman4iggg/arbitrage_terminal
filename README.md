@@ -1,29 +1,83 @@
 # Arbitrage Terminal
 
-Production-oriented MVP for monitoring cross-exchange perpetual futures arbitrage.
+**Arbitrage Terminal** — production-oriented MVP веб-приложения для мониторинга арбитражных возможностей на perpetual futures / swap markets.
 
-The application collects public market prices, normalizes perpetual markets, detects price spreads,
-stores recent history, renders a dark trading terminal UI, and sends Telegram notifications. It does
-not place orders, use exchange private API keys, or perform automated trading.
+Приложение получает публичные рыночные данные с криптобирж, нормализует цены perpetual markets, считает spread между биржами, показывает данные в dark-mode торговом интерфейсе и отправляет Telegram-уведомления.
 
-## Features
+Проект **не выполняет торговые операции**:
 
-- Perpetual futures monitoring for Binance USD-M, Bybit USDT, MEXC USDT, and Hyperliquid.
-- Modular exchange adapter layer: async ccxt adapters for CEX exchanges and an httpx adapter for
-  Hyperliquid.
-- Extensible strategy layer with the MVP `PriceSpreadStrategy`.
-- Configurable global threshold and per-pair thresholds.
-- APScheduler monitoring cycle with graceful degradation when an exchange or pair is unavailable.
-- Telegram Bot API notifications with cooldown protection.
-- PostgreSQL persistence for exchanges, pairs, settings, opportunities, notification logs, exchange
-  statuses, and price snapshots.
-- Snapshot retention window for chart history.
-- React terminal UI with Dashboard, Opportunities, Exchanges, Charts, and Settings pages.
-- FastAPI Swagger documentation and pytest coverage for critical business logic.
+- не выставляет ордера;
+- не использует приватные API-ключи бирж;
+- не реализует автотрейдинг;
+- не хранит торговые ключи пользователя.
 
-## Supported Markets
+Это read-only терминал для мониторинга рынка.
 
-The MVP monitors `market_type = perpetual` only:
+## Возможности
+
+- Мониторинг perpetual futures / swap markets.
+- Поддержка CEX и perp-DEX источников.
+- Модульная архитектура exchange adapters.
+- Расчёт price spread между биржами.
+- Funding context в таблице opportunities.
+- Dashboard со статусом мониторинга.
+- Таблица arbitrage opportunities с фильтрами.
+- Страница Exchanges со статусами бирж.
+- Страница Settings:
+  - включение и выключение бирж;
+  - включение и выключение пар;
+  - поиск по уже добавленным парам;
+  - ручное добавление новых USDT perpetual пар;
+  - настройка threshold;
+  - настройка Telegram;
+  - настройка cooldown уведомлений.
+- Страница Charts:
+  - график цены выбранной пары по биржам;
+  - график spread во времени;
+  - top spreads за период.
+- Страница My Trades:
+  - ручное создание наблюдаемой позиции;
+  - выбор монеты и двух бирж;
+  - ввод long entry price;
+  - ввод short entry price;
+  - ввод размера позиции в монетах;
+  - отображение entry spread, включая отрицательный;
+  - отображение live spread;
+  - отображение funding spread;
+  - отображение live PnL;
+  - график spread по сделке;
+  - редактирование thresholds и размера позиции;
+  - Telegram-уведомления по пользовательским порогам.
+- Telegram Bot API уведомления с cooldown защитой от спама.
+- PostgreSQL persistence.
+- Alembic migrations.
+- APScheduler background monitoring.
+- Graceful degradation: если одна биржа или пара недоступна, остальные продолжают работать.
+- Pytest-тесты для ключевой бизнес-логики.
+- Docker Compose запуск.
+
+## Поддерживаемые биржи
+
+На текущем этапе добавлены:
+
+| Биржа | Тип | Источник данных |
+| --- | --- | --- |
+| Binance USD-M Futures | CEX | `ccxt` |
+| Bybit USDT Perpetuals | CEX | `ccxt` |
+| MEXC USDT Perpetuals | CEX | `ccxt` |
+| Hyperliquid | perp-DEX | официальный публичный API |
+| Aster | perp-DEX | `ccxt` |
+| Variational Omni | perp-DEX | официальный публичный API |
+| BingX | CEX | `ccxt` |
+| Bitget | CEX | `ccxt` |
+| OKX | CEX | `ccxt` |
+| Gate.io | CEX | `ccxt` |
+
+Некоторые пары поддерживаются не на всех биржах. Например, `TON/USDT` может отсутствовать на MEXC и BingX. Это нормальное поведение: приложение логирует warning, показывает статус и продолжает мониторинг остальных рынков.
+
+## Торговые пары
+
+Базовый включённый список:
 
 ```text
 BTC/USDT
@@ -35,256 +89,519 @@ DOGE/USDT
 TON/USDT
 ```
 
-Pairs and exchanges can be enabled or disabled from Settings. Some exchanges do not expose every
-pair. For example, MEXC may report `TON/USDT` as unsupported; the remaining markets continue to run.
-
-## Architecture
+Также в базе есть дополнительные пары, выключенные по умолчанию:
 
 ```text
-arbitrage-terminal/
+ADA/USDT
+AVAX/USDT
+LINK/USDT
+DOT/USDT
+LTC/USDT
+BCH/USDT
+TRX/USDT
+SUI/USDT
+APT/USDT
+ARB/USDT
+OP/USDT
+NEAR/USDT
+FIL/USDT
+PEPE/USDT
+WIF/USDT
+```
+
+Через Settings можно добавить почти любую USDT perpetual пару вручную. Например:
+
+```text
+SEI
+TAO
+1000PEPE
+```
+
+Ввод `SEI` будет нормализован в `SEI/USDT`.
+
+Важно: добавление пары в терминал не означает, что она есть на всех биржах. Если конкретная биржа не поддерживает пару, она будет пропущена только для этой биржи.
+
+## Архитектура
+
+```text
+coursework/
   backend/
     app/
-      api/routes/          # FastAPI REST endpoints
-      core/                # config, logging, APScheduler lifecycle
-      db/                  # SQLAlchemy models and Alembic migrations
-      exchanges/           # exchange adapters and registry
-      notifications/       # Telegram Bot API sender
-      schemas/             # Pydantic domain and API schemas
-      services/            # monitoring, persistence, settings, cooldown
-      strategies/          # arbitrage strategy interface
+      api/routes/          # REST endpoints FastAPI
+      core/                # config, logging, scheduler
+      db/                  # SQLAlchemy models и Alembic migrations
+      exchanges/           # exchange adapters и registry
+      notifications/       # Telegram sender
+      schemas/             # Pydantic schemas
+      services/            # market data, arbitrage, settings, persistence
+      strategies/          # strategy interface и price spread strategy
       main.py
     tests/
     Dockerfile
     requirements.txt
+
   frontend/
     src/
       api/
       components/
       pages/
     Dockerfile
-  docker-compose.yml       # local development
-  docker-compose.prod.yml  # VPS deployment baseline
+    package.json
+
+  docker-compose.yml
+  docker-compose.prod.yml
   .env.example
+  README.md
 ```
 
-The monitoring flow is:
+Основной pipeline мониторинга:
 
 ```text
-APScheduler -> enabled exchanges and pairs -> normalized tickers
-            -> PriceSpreadStrategy -> opportunities -> PostgreSQL
-            -> cooldown check -> Telegram Bot API
+APScheduler
+  -> enabled exchanges + enabled pairs
+  -> exchange adapters
+  -> normalized tickers
+  -> PriceSpreadStrategy
+  -> funding enrichment
+  -> PostgreSQL persistence
+  -> Telegram cooldown check
+  -> frontend REST API
 ```
 
-## Quick Start
+## Стек
 
-Requirements:
+Backend:
 
-- Docker Desktop on Windows or Docker Engine with the Compose plugin on Linux.
+- Python 3.12+
+- FastAPI
+- SQLAlchemy 2.0
+- Alembic
+- PostgreSQL
+- Pydantic Settings
+- APScheduler
+- ccxt
+- httpx
+- pytest
 
-Create the local environment file:
+Frontend:
+
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- TanStack Query
+- Recharts
+- Axios
+
+Infrastructure:
+
+- Docker
+- Docker Compose
+- PostgreSQL container
+
+## Быстрый запуск
+
+Требования:
+
+- Docker Desktop на Windows или Docker Engine + Docker Compose plugin на Linux.
+
+Создать `.env`:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-On Linux or macOS:
+На Linux/macOS:
 
 ```bash
 cp .env.example .env
 ```
 
-Start the development stack:
+Запустить проект:
 
 ```bash
 docker compose up --build
 ```
 
-Open:
+Открыть:
 
 - Frontend: [http://localhost:5173](http://localhost:5173)
+- Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
 - Health endpoint: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 - OpenAPI JSON: [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json)
 
-Stop the stack:
+Остановить:
 
 ```bash
 docker compose down
 ```
 
-PostgreSQL data remains in the `postgres_data` volume.
+Данные PostgreSQL сохраняются в Docker volume `postgres_data`.
 
-## Environment Variables
+## Переменные окружения
 
-Copy `.env.example` to `.env`. Never commit `.env`.
+Файл `.env.example` нужно скопировать в `.env`. Сам `.env` нельзя коммитить.
 
-| Variable | Default | Purpose |
+| Переменная | Значение по умолчанию | Описание |
 | --- | --- | --- |
-| `DATABASE_URL` | local Compose PostgreSQL | SQLAlchemy async connection URL |
-| `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed frontend origins |
-| `VITE_API_URL` | `http://localhost:8000/api` | Browser-visible backend API URL embedded in frontend build |
-| `MARKET_TYPE` | `perpetual` | MVP market type |
-| `SCHEDULER_ENABLED` | `true` | Enable periodic market monitoring |
-| `MONITORING_INTERVAL_SECONDS` | `10` | Scheduler interval |
-| `PERSIST_PRICE_SNAPSHOTS` | `true` | Store normalized chart snapshots |
-| `PRICE_SNAPSHOT_RETENTION_HOURS` | `24` | Remove older snapshots |
-| `DEFAULT_SPREAD_THRESHOLD_PERCENT` | `0.5` | Global opportunity threshold |
-| `NOTIFICATION_COOLDOWN_SECONDS` | `300` | Suppress duplicate Telegram alerts |
-| `TELEGRAM_NOTIFICATIONS_ENABLED` | `false` | Default notification state |
-| `TELEGRAM_BOT_TOKEN` | empty | Telegram bot token from BotFather |
-| `TELEGRAM_CHAT_ID` | empty | Destination user or group chat ID |
+| `APP_NAME` | `Arbitrage Terminal API` | Название backend-приложения |
+| `APP_ENV` | `development` | Окружение |
+| `APP_DEBUG` | `true` | Debug mode |
+| `API_PREFIX` | `/api` | Префикс REST API |
+| `DATABASE_URL` | Compose PostgreSQL | Async SQLAlchemy URL |
+| `CORS_ORIGINS` | `http://localhost:5173` | Разрешённые frontend origins |
+| `VITE_API_URL` | `http://localhost:8000/api` | Backend URL для frontend |
+| `MARKET_TYPE` | `perpetual` | Market type MVP |
+| `SCHEDULER_ENABLED` | `true` | Включить background monitoring |
+| `MONITORING_INTERVAL_SECONDS` | `10` | Интервал scheduler cycle |
+| `PERSIST_PRICE_SNAPSHOTS` | `true` | Сохранять snapshots для графиков |
+| `PRICE_SNAPSHOT_RETENTION_HOURS` | `24` | Retention истории |
+| `DEFAULT_SPREAD_THRESHOLD_PERCENT` | `0.5` | Глобальный порог opportunities |
+| `NOTIFICATION_COOLDOWN_SECONDS` | `300` | Cooldown одинаковых Telegram-уведомлений |
+| `TELEGRAM_NOTIFICATIONS_ENABLED` | `false` | Включены ли Telegram alerts по умолчанию |
+| `TELEGRAM_BOT_TOKEN` | пусто | Токен Telegram bot |
+| `TELEGRAM_CHAT_ID` | пусто | Chat ID получателя |
 
-Runtime values such as threshold, interval, enabled exchanges, enabled pairs, Telegram state, and
-chat ID can be changed in the Settings page. The bot token remains environment-only.
+Часть настроек можно менять в UI на странице Settings без перезапуска backend:
 
-## Telegram Setup
+- spread threshold;
+- update interval;
+- notification cooldown;
+- enabled exchanges;
+- enabled pairs;
+- Telegram chat ID;
+- Telegram notifications enabled/disabled.
 
-1. Open the official [@BotFather](https://t.me/BotFather) account in Telegram.
-2. Run `/newbot`, choose a name and a username ending in `bot`, then copy the token.
-3. Open your new bot, press Start, and send a message.
-4. Open `https://api.telegram.org/botYOUR_TOKEN/getUpdates`.
-5. Read `result[].message.chat.id` from the JSON response.
-6. Add the values to `.env`:
+Bot token остаётся только в `.env`.
+
+## Telegram
+
+1. Открыть [@BotFather](https://t.me/BotFather).
+2. Выполнить `/newbot`.
+3. Создать бота и скопировать токен.
+4. Открыть созданного бота и отправить ему любое сообщение.
+5. Открыть URL:
+
+```text
+https://api.telegram.org/botYOUR_TOKEN/getUpdates
+```
+
+6. Найти `message.chat.id`.
+7. Записать значения в `.env`:
 
 ```env
 TELEGRAM_BOT_TOKEN=replace_with_bot_token
 TELEGRAM_CHAT_ID=replace_with_chat_id
 ```
 
-Restart backend after editing `.env`:
+8. Перезапустить backend:
 
 ```bash
 docker compose restart backend
 ```
 
-Open Settings and click `Send test notification`. Enable Telegram alerts and save settings when the
-test succeeds.
+9. В Settings нажать `Send test notification`.
+10. Включить Telegram alerts.
 
-Treat the bot token as a secret. If it appears in a screenshot, URL history shared with others, or
-logs, revoke it through BotFather and issue a new token.
+Если токен попал в скриншот, историю браузера или публичный репозиторий, его нужно перевыпустить через BotFather.
 
-## Database Migrations
+## Notification cooldown
 
-Apply migrations:
+`Notification cooldown seconds` защищает от спама одинаковыми уведомлениями.
+
+Например, если cooldown равен `300`, то одинаковое уведомление по одной паре и одной связке бирж не будет отправляться чаще одного раза в 5 минут.
+
+Cooldown применяется к:
+
+- обычным arbitrage opportunities;
+- price alerts в My Trades;
+- funding alerts в My Trades.
+
+Если поставить `0`, уведомления могут приходить почти каждый scheduler cycle.
+
+## REST API
+
+| Method | Endpoint | Описание |
+| --- | --- | --- |
+| `GET` | `/api/health` | Health check приложения и БД |
+| `GET` | `/api/dashboard` | Метрики dashboard |
+| `GET` | `/api/exchanges` | Список бирж со статусом |
+| `PATCH` | `/api/exchanges/{exchange_id}` | Включить или выключить биржу |
+| `GET` | `/api/pairs` | Список торговых пар |
+| `POST` | `/api/pairs` | Добавить новую USDT perpetual пару |
+| `PATCH` | `/api/pairs/{pair_id}` | Включить или выключить пару |
+| `GET` | `/api/opportunities` | Таблица текущих opportunities |
+| `GET` | `/api/settings` | Runtime settings |
+| `PATCH` | `/api/settings` | Обновить runtime settings |
+| `GET` | `/api/charts/prices` | История цены по биржам |
+| `GET` | `/api/charts/spreads` | История spread |
+| `GET` | `/api/charts/top-spreads` | Top spreads |
+| `GET` | `/api/trade-watches` | Список My Trades |
+| `POST` | `/api/trade-watches` | Создать наблюдаемую сделку |
+| `PATCH` | `/api/trade-watches/{id}` | Обновить сделку |
+| `DELETE` | `/api/trade-watches/{id}` | Удалить сделку |
+| `GET` | `/api/trade-watches/{id}/spread-history` | График spread по сделке |
+| `POST` | `/api/notifications/test-telegram` | Тестовое Telegram-сообщение |
+
+Swagger доступен по адресу:
+
+[http://localhost:8000/docs](http://localhost:8000/docs)
+
+## My Trades
+
+Страница My Trades предназначена для ручного отслеживания позиции, которую пользователь открыл самостоятельно на биржах.
+
+При создании указывается:
+
+- монета;
+- биржа long / buy;
+- биржа short / sell;
+- long entry price;
+- short entry price;
+- размер позиции в монетах;
+- price alert threshold;
+- funding alert threshold.
+
+Приложение показывает:
+
+- текущую цену buy-ноги;
+- текущую цену sell-ноги;
+- entry spread;
+- текущий price spread;
+- funding обеих ног;
+- funding spread;
+- live PnL;
+- график spread за последние 30 минут.
+
+Формула entry spread:
+
+```text
+((short_entry_price - long_entry_price) / long_entry_price) * 100
+```
+
+Entry spread может быть отрицательным. В UI:
+
+- положительный spread отображается зелёным;
+- отрицательный spread отображается красным.
+
+Формула PnL:
+
+```text
+((current_buy - entry_buy) + (entry_sell - current_sell)) * position_size_coins
+```
+
+Комиссии, slippage и фактически начисленный funding пока не учитываются.
+
+## Opportunities
+
+Opportunities считаются по простой MVP-формуле:
+
+```text
+spread_percent = ((sell_price - buy_price) / buy_price) * 100
+```
+
+Где:
+
+- `buy_price` — минимальный `last_price` среди бирж;
+- `sell_price` — максимальный `last_price` среди бирж.
+
+В таблице также отображается funding context:
+
+- buy funding;
+- sell funding;
+- funding delta.
+
+Funding нужен, чтобы лучше понимать, стоит ли рассматривать конкретный spread. Например, хороший price spread может быть съеден неблагоприятным funding.
+
+## Миграции БД
+
+Применить миграции:
 
 ```bash
 docker compose exec backend alembic upgrade head
 ```
 
-Create a migration after model changes:
+Проверить текущую ревизию:
+
+```bash
+docker compose exec backend alembic current
+```
+
+Создать новую миграцию после изменения моделей:
 
 ```bash
 docker compose exec backend alembic revision --autogenerate -m "describe change"
 ```
 
-Production Compose applies available migrations automatically before backend startup.
+## Тесты
 
-## REST API
+Backend tests используют изолированную SQLite БД и не обращаются к реальным биржам.
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/health` | Application and database health |
-| `GET` | `/api/dashboard` | Terminal metrics and monitoring status |
-| `GET` | `/api/exchanges` | Exchanges with health status |
-| `PATCH` | `/api/exchanges/{exchange_id}` | Enable or disable an exchange |
-| `GET` | `/api/pairs` | Trading pairs |
-| `PATCH` | `/api/pairs/{pair_id}` | Enable or disable a pair |
-| `GET` | `/api/opportunities` | Filtered current opportunities |
-| `GET` | `/api/settings` | Runtime settings |
-| `PATCH` | `/api/settings` | Update runtime settings |
-| `GET` | `/api/charts/prices` | Price history by exchange |
-| `GET` | `/api/charts/spreads` | Spread history |
-| `GET` | `/api/charts/top-spreads` | Highest recorded spreads |
-| `POST` | `/api/notifications/test-telegram` | Send a Telegram test message |
-
-## Tests
-
-The backend test suite uses an isolated async SQLite database. It does not modify the PostgreSQL
-volume or call real exchange APIs.
-
-Build backend after dependency changes and run tests:
+Запуск:
 
 ```bash
-docker compose build backend
-docker compose run --rm -e SCHEDULER_ENABLED=false backend pytest -q
+docker compose exec backend pytest
 ```
 
-Build frontend:
+Проверка компиляции backend:
+
+```bash
+docker compose exec backend python -m compileall app
+```
+
+Сборка frontend:
 
 ```bash
 docker compose exec frontend npm run build
 ```
 
-## Add an Exchange
+## Как добавить новую биржу
 
-1. Implement `ExchangeAdapter` from `backend/app/exchanges/base.py`.
-2. Return normalized `Ticker`, `Market`, and optional `FundingRate` schemas.
-3. Keep exchange-specific symbol mapping inside the adapter.
-4. Register the factory in `backend/app/exchanges/registry.py`.
-5. Add seed data through an Alembic migration.
-6. Add a mock-backed adapter test.
+1. Создать adapter в `backend/app/exchanges/`.
+2. Реализовать общий интерфейс `ExchangeAdapter`:
 
-For ccxt exchanges, enable rate limiting and select linear perpetual swap markets. For perp DEX
-exchanges, use their official public API and normalize payloads before strategy evaluation.
+```python
+async def get_ticker(self, symbol: str) -> Ticker: ...
+async def get_markets(self) -> list[Market]: ...
+async def get_funding_rate(self, symbol: str) -> FundingRate | None: ...
+```
 
-## Add a Strategy
+3. Нормализовать символы к виду `BASE/USDT`.
+4. Для CEX по возможности использовать `ccxt` с `enableRateLimit`.
+5. Для perp-DEX использовать официальный публичный API.
+6. Зарегистрировать adapter в `backend/app/exchanges/registry.py`.
+7. Добавить биржу в БД через Alembic migration.
+8. Добавить тест.
 
-1. Implement `Strategy` from `backend/app/strategies/base.py`.
-2. Accept normalized market data rather than exchange-specific payloads.
-3. Return `Opportunity` schemas.
-4. Wire the strategy through the service layer.
-5. Add focused business-logic tests.
+## Как добавить новую стратегию
 
-Planned strategies include funding-rate arbitrage, spot-perp spread, DEX-CEX spread, and triangular
-arbitrage.
+1. Создать класс в `backend/app/strategies/`.
+2. Реализовать интерфейс `Strategy`.
+3. Использовать нормализованные данные, а не raw payload биржи.
+4. Возвращать `Opportunity`.
+5. Подключить стратегию в service layer.
+6. Добавить тесты бизнес-логики.
+
+В будущем можно добавить:
+
+- `FundingRateStrategy`;
+- `SpotPerpSpreadStrategy`;
+- `DexCexSpreadStrategy`;
+- `TriangularArbitrageStrategy`.
 
 ## Deployment
 
-The included `docker-compose.prod.yml` is a VPS baseline:
+Для VPS можно использовать `docker-compose.prod.yml`.
+
+Пример:
 
 ```bash
 cp .env.example .env
-# Set a strong POSTGRES_PASSWORD and update DATABASE_URL accordingly.
-# Set production CORS_ORIGINS, VITE_API_URL, and Telegram values.
+# Заполнить POSTGRES_PASSWORD, DATABASE_URL, CORS_ORIGINS, VITE_API_URL, Telegram values
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Production services:
-
-- PostgreSQL with a persistent `postgres_data` volume.
-- FastAPI backend without `--reload`; migrations run before startup.
-- Nginx frontend image serving the compiled Vite application.
-
-Place Caddy or Nginx in front of the exposed ports for HTTPS and host routing. A typical routing plan
-is:
+Рекомендуемая схема:
 
 ```text
-https://terminal.example.com      -> frontend:80
+VPS
+  -> Docker Compose
+  -> PostgreSQL volume
+  -> backend FastAPI
+  -> frontend Nginx
+  -> reverse proxy Caddy или Nginx
+  -> HTTPS
+```
+
+Пример routing:
+
+```text
+https://terminal.example.com      -> frontend
 https://terminal.example.com/api  -> backend:8000/api
 https://terminal.example.com/docs -> backend:8000/docs
 ```
 
-Operational checklist:
+Production checklist:
 
-- Store `.env` outside version control.
-- Restrict PostgreSQL from public access.
-- Back up the Docker volume.
-- Enable TLS.
-- Monitor disk usage because snapshots are persisted.
-- Rotate Telegram bot tokens if exposed.
-- Review logs regularly; HTTP library request URLs are suppressed to avoid credential leakage.
+- не коммитить `.env`;
+- закрыть PostgreSQL от публичного доступа;
+- включить HTTPS;
+- настроить backup volume;
+- следить за размером snapshots;
+- хранить Telegram token как secret;
+- проверять логи scheduler.
 
-## MVP Scope
+## Сценарий демонстрации для защиты
 
-Implemented:
+1. Запустить проект:
 
-- Read-only perpetual monitoring.
-- Spread detection by normalized `last_price`.
-- Dashboard, tables, settings, charts, Telegram notifications, cooldown, tests, and Docker setup.
+```bash
+docker compose up --build
+```
 
-Intentionally excluded:
+2. Открыть Dashboard.
+3. Показать количество активных бирж и пар.
+4. Открыть Exchanges и показать статусы бирж.
+5. Открыть Settings:
+   - найти пару через поиск;
+   - включить или выключить пару;
+   - добавить новую пару, например `SEI`.
+6. Открыть Opportunities:
+   - показать buy/sell exchanges;
+   - показать spread;
+   - показать funding обеих ног.
+7. Открыть Charts:
+   - показать price chart;
+   - показать spread chart.
+8. Открыть My Trades:
+   - создать наблюдаемую сделку;
+   - показать entry spread;
+   - показать live spread;
+   - показать funding spread;
+   - показать PnL;
+   - показать график spread.
+9. Открыть Settings и отправить Telegram test notification.
+10. Открыть Swagger.
 
-- Order placement and auto-trading.
-- Private exchange API keys.
-- Authentication and multi-user management.
-- Order-book depth, liquidity, slippage, fees, and funding strategy execution.
+## Ограничения MVP
+
+Это намеренные ограничения первого релиза:
+
+- opportunities считаются по `last_price`, а не по `ask/bid`;
+- комиссии не учитываются;
+- slippage не учитывается;
+- order book depth не учитывается;
+- ликвидность не оценивается;
+- funding отображается как context, но funding arbitrage strategy ещё не реализована;
+- WebSocket streams ещё не используются;
+- массовое включение сотен пар может замедлять scheduler;
+- часть пар не поддерживается на всех биржах;
+- Omni использует USDC-based публичные цены, которые нормализуются для сравнения с `USDT` рынками приблизительно.
+
+Следующие логичные улучшения:
+
+- считать executable spread по `buy ask` и `sell bid`;
+- добавить комиссии;
+- добавить order book depth;
+- добавить slippage;
+- добавить PnL по ногам;
+- добавить закрытые сделки;
+- добавить WebSocket или bulk-fetch оптимизацию.
+
+## Статус проекта
+
+Проект готов как MVP для курсовой работы:
+
+- запускается через Docker Compose;
+- backend работает на FastAPI;
+- frontend работает на React + TypeScript;
+- PostgreSQL подключён;
+- Swagger доступен;
+- реальные биржи подключены;
+- perpetual markets мониторятся;
+- opportunities считаются;
+- Telegram test notification работает;
+- My Trades реализован;
+- графики реализованы;
+- тесты добавлены;
+- автотрейдинг отсутствует.
