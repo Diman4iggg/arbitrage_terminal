@@ -20,7 +20,7 @@ export function Opportunities() {
       <PageHeader title="Arbitrage Opportunities" description="Spreads above your configured threshold, sorted by profitability." />
       <Card>
         <div className="grid gap-3 border-b border-terminal-700 p-4 md:grid-cols-3">
-          <Input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder="Filter symbol, e.g. BTC/USDT" />
+          <Input value={symbol} onChange={(event) => setSymbol(event.target.value)} placeholder="Filter symbol, e.g. BTC or BNB" />
           <Select value={exchange} onChange={(event) => setExchange(event.target.value)}>
             <option value="">All exchanges</option>
             {["Binance", "Bybit", "MEXC", "Hyperliquid"].map((item) => <option key={item}>{item}</option>)}

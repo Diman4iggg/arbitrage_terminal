@@ -39,14 +39,14 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_320px]">
-        <Card>
+      <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <Card className="overflow-hidden">
           <CardHeader>
             <h2 className="text-sm font-semibold">Recent opportunities</h2>
           </CardHeader>
           <OpportunityTable opportunities={data.recent_opportunities} />
         </Card>
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Monitoring status</h2>
             <Badge tone={data.monitoring.scheduler_running ? "success" : "danger"}>

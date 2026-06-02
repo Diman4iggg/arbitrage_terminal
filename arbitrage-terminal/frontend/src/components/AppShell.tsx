@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="mt-1 text-xs font-medium text-zinc-300">Perpetual futures</p>
         </div>
       </aside>
-      <div className="md:pl-60">
+      <div className="min-w-0 md:pl-60">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-terminal-700 bg-terminal-900/95 px-4 backdrop-blur md:px-6">
           <div>
             <p className="text-xs font-semibold tracking-wide text-zinc-200">MARKET MONITOR</p>
@@ -71,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
         </nav>
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="min-w-0 p-4 md:p-6">{children}</main>
       </div>
     </div>
   )

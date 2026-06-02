@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { terminalApi } from "../api/client"
 import type { RuntimeSettings } from "../api/types"
 import { PageHeader } from "../components/PageHeader"
-import { Button, Card, CardContent, CardHeader, Input, Skeleton, Switch } from "../components/ui"
+import { Badge, Button, Card, CardContent, CardHeader, Input, Skeleton, Switch } from "../components/ui"
 
 export function Settings() {
   const queryClient = useQueryClient()
@@ -33,6 +33,15 @@ export function Settings() {
       showToast("danger", detail ?? "Unable to send Telegram test notification.")
     },
   })
+  const updateTelegramEnabled = useMutation({
+    mutationFn: (enabled: boolean) => terminalApi.updateSettings({ telegram_notifications_enabled: enabled }),
+    onSuccess: (data) => {
+      setForm(data)
+      showToast("success", data.telegram_notifications_enabled ? "Telegram alerts enabled." : "Telegram alerts disabled.")
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+    onError: () => showToast("danger", "Unable to update Telegram alert state."),
+  })
   const updatePair = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updatePair(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pairs"] }) })
   const updateExchange = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updateExchange(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["exchanges"] }) })
 
@@ -54,10 +63,19 @@ export function Settings() {
           <Field label="Notification cooldown seconds"><Input type="number" min="0" value={form.notification_cooldown_seconds} onChange={(e) => setForm({ ...form, notification_cooldown_seconds: Number(e.target.value) })} /></Field>
         </SettingsCard>
         <SettingsCard title="Telegram notifications">
-          <ToggleRow label="Enable Telegram alerts" checked={form.telegram_notifications_enabled} onChange={(value) => setForm({ ...form, telegram_notifications_enabled: value })} />
+          <div className="flex items-center justify-between gap-4">
+            <Badge tone={form.telegram_notifications_enabled ? "success" : "warning"}>
+              {form.telegram_notifications_enabled ? "Alerts active" : "Alerts disabled"}
+            </Badge>
+            <Switch
+              label="Enable Telegram alerts"
+              checked={form.telegram_notifications_enabled}
+              onChange={(enabled) => updateTelegramEnabled.mutate(enabled)}
+            />
+          </div>
           <Field label="Telegram chat ID"><Input value={form.telegram_chat_id} onChange={(e) => setForm({ ...form, telegram_chat_id: e.target.value })} placeholder="Configured in Stage 6" /></Field>
           <Button onClick={() => testTelegram.mutate()} disabled={testTelegram.isPending}>{testTelegram.isPending ? "Sending..." : "Send test notification"}</Button>
-          <p className="text-xs leading-5 text-zinc-500">The bot token is loaded from the backend environment. No exchange private keys are required.</p>
+          <p className="text-xs leading-5 text-zinc-500">The alert switch is applied immediately. The bot token is loaded from the backend environment. No exchange private keys are required.</p>
         </SettingsCard>
         <SettingsCard title="Enabled exchanges">
           {exchanges.data?.map((item) => <ToggleRow key={item.id} label={item.name} checked={item.enabled} onChange={(enabled) => updateExchange.mutate({ id: item.id, enabled })} />)}

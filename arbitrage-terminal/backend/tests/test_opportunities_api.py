@@ -38,7 +38,7 @@ async def test_get_opportunities_returns_active_rows_sorted_by_spread(
     assert [item["symbol"] for item in response.json()] == ["ETH/USDT", "BTC/USDT"]
 
 
-async def test_get_opportunities_supports_symbol_filter(session: AsyncSession) -> None:
+async def test_get_opportunities_supports_partial_symbol_filter(session: AsyncSession) -> None:
     session.add_all(
         [
             _make_model("BTC/USDT", "0.75", OpportunityStatus.ACTIVE),
@@ -56,7 +56,7 @@ async def test_get_opportunities_supports_symbol_filter(session: AsyncSession) -
             transport=ASGITransport(app=app),
             base_url="http://test",
         ) as client:
-            response = await client.get("/api/opportunities", params={"symbol": "btc/usdt"})
+            response = await client.get("/api/opportunities", params={"symbol": "btc"})
     finally:
         app.dependency_overrides.clear()
 
@@ -79,4 +79,3 @@ def _make_model(
         spread_percent=Decimal(spread_percent),
         status=status,
     )
-

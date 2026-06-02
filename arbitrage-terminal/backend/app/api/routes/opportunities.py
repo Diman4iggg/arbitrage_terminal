@@ -24,7 +24,7 @@ async def get_opportunities(
         ArbitrageOpportunity.spread_percent >= min_spread
     )
     if symbol:
-        query = query.where(ArbitrageOpportunity.symbol == symbol.upper())
+        query = query.where(ArbitrageOpportunity.symbol.ilike(f"%{symbol.strip()}%"))
     if exchange:
         query = query.where(
             or_(

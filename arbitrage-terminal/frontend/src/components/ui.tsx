@@ -8,7 +8,7 @@ export function cn(...inputs: Array<string | false | null | undefined>) {
 }
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn("rounded-lg border border-terminal-700 bg-terminal-900", className)}>{children}</section>
+  return <section className={cn("min-w-0 rounded-lg border border-terminal-700 bg-terminal-900", className)}>{children}</section>
 }
 
 export function CardHeader({ children, className }: { children: ReactNode; className?: string }) {
