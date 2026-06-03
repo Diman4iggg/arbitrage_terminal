@@ -72,7 +72,10 @@ class MonitoringService:
                     await notification_service.notify_opportunities(
                         opportunities=opportunities,
                         cooldown_seconds=runtime_settings.notification_cooldown_seconds,
-                        enabled=runtime_settings.telegram_notifications_enabled,
+                        enabled=(
+                            runtime_settings.telegram_notifications_enabled
+                            and runtime_settings.opportunity_notifications_enabled
+                        ),
                     )
                     await TradeWatchService(
                         session=session,

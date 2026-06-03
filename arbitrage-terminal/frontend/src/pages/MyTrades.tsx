@@ -74,7 +74,7 @@ export function MyTrades() {
         <Card><CardContent className="text-sm text-rose-300">Unable to load My Trades.</CardContent></Card>
       ) : watches.data?.length ? (
         <div className="grid gap-3 xl:grid-cols-2">
-          {watches.data.map((watch) => <WatchCard key={watch.id} watch={watch} onUpdate={(payload) => update.mutate({ id: watch.id, payload })} onDelete={() => remove.mutate(watch.id)} />)}
+          {watches.data.map((watch) => <WatchCard key={watch.id} watch={watch} exchanges={exchangeNames} onUpdate={(payload) => update.mutate({ id: watch.id, payload })} onDelete={() => remove.mutate(watch.id)} />)}
         </div>
       ) : (
         <Card><CardContent className="py-10 text-center text-sm text-zinc-500">No monitored directions yet. Add a coin and two exchanges above.</CardContent></Card>
@@ -83,7 +83,7 @@ export function MyTrades() {
   )
 }
 
-function WatchCard({ watch, onUpdate, onDelete }: { watch: TradeWatch; onUpdate: (payload: TradeWatchUpdate) => void; onDelete: () => void }) {
+function WatchCard({ watch, exchanges, onUpdate, onDelete }: { watch: TradeWatch; exchanges: string[]; onUpdate: (payload: TradeWatchUpdate) => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState(() => makeEditForm(watch))
   const history = useQuery({
@@ -99,6 +99,9 @@ function WatchCard({ watch, onUpdate, onDelete }: { watch: TradeWatch; onUpdate:
     onUpdate(editForm)
     setEditing(false)
   }
+  const availableExchanges = Array.from(new Set([...exchanges, watch.buy_exchange, watch.sell_exchange]))
+  const selectedBuyExchange = editForm.buy_exchange ?? watch.buy_exchange
+  const selectedSellExchange = editForm.sell_exchange ?? watch.sell_exchange
 
   return (
     <Card>
@@ -121,10 +124,12 @@ function WatchCard({ watch, onUpdate, onDelete }: { watch: TradeWatch; onUpdate:
           <Metric label="Position PnL" value={formatPnl(watch.pnl_usdt, watch.pnl_percent)} tone={pnlTone(watch.pnl_usdt)} />
         </div>
         {editing && <div className="mt-4 grid gap-3 rounded-md border border-terminal-700 bg-terminal-950 p-3 sm:grid-cols-3">
+          <Field label="Buy exchange"><ExchangeSelect exchanges={availableExchanges} value={selectedBuyExchange} onChange={(buy_exchange) => setEditForm({ ...editForm, buy_exchange })} /></Field>
+          <Field label="Sell exchange"><ExchangeSelect exchanges={availableExchanges} value={selectedSellExchange} onChange={(sell_exchange) => setEditForm({ ...editForm, sell_exchange })} /></Field>
           <Field label="Position size, coins"><RequiredNumber value={editForm.position_size_coins ?? 0} onChange={(position_size_coins) => setEditForm({ ...editForm, position_size_coins })} /></Field>
           <Field label="Price alert %"><OptionalNumber value={editForm.price_alert_threshold_percent ?? null} onChange={(price_alert_threshold_percent) => setEditForm({ ...editForm, price_alert_threshold_percent })} /></Field>
           <Field label="Funding alert %"><OptionalNumber value={editForm.funding_alert_threshold_percent ?? null} onChange={(funding_alert_threshold_percent) => setEditForm({ ...editForm, funding_alert_threshold_percent })} /></Field>
-          <div className="flex gap-2 sm:col-span-3"><Button onClick={save} disabled={!editForm.position_size_coins || editForm.position_size_coins <= 0}><Save className="mr-1 inline h-3.5 w-3.5" />Save changes</Button><Button onClick={() => setEditing(false)}><X className="mr-1 inline h-3.5 w-3.5" />Cancel</Button></div>
+          <div className="flex gap-2 sm:col-span-3"><Button onClick={save} disabled={!editForm.position_size_coins || editForm.position_size_coins <= 0 || selectedBuyExchange === selectedSellExchange}><Save className="mr-1 inline h-3.5 w-3.5" />Save changes</Button><Button onClick={() => setEditing(false)}><X className="mr-1 inline h-3.5 w-3.5" />Cancel</Button></div>
         </div>}
         <div className="mt-4 border-t border-terminal-700 pt-3">
           <p className="mb-2 text-[10px] uppercase tracking-wider text-zinc-600">Spread history, 30 min</p>
@@ -162,6 +167,8 @@ function RequiredNumber({ value, onChange }: { value: number; onChange: (value: 
 
 function makeEditForm(watch: TradeWatch): TradeWatchUpdate {
   return {
+    buy_exchange: watch.buy_exchange,
+    sell_exchange: watch.sell_exchange,
     position_size_coins: watch.position_size_coins === null ? 0 : Number(watch.position_size_coins),
     price_alert_threshold_percent: watch.price_alert_threshold_percent === null ? null : Number(watch.price_alert_threshold_percent),
     funding_alert_threshold_percent: watch.funding_alert_threshold_percent === null ? null : Number(watch.funding_alert_threshold_percent),

@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
@@ -83,8 +83,34 @@ async def update_trade_watch(
     trade_watch = await session.get(TradeWatch, trade_watch_id)
     if trade_watch is None:
         raise HTTPException(status_code=404, detail="Trade watch not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+
+    updates = payload.model_dump(exclude_unset=True)
+    next_buy_exchange = updates.get("buy_exchange", trade_watch.buy_exchange)
+    next_sell_exchange = updates.get("sell_exchange", trade_watch.sell_exchange)
+    exchanges_changed = (
+        next_buy_exchange != trade_watch.buy_exchange
+        or next_sell_exchange != trade_watch.sell_exchange
+    )
+
+    if "buy_exchange" in updates or "sell_exchange" in updates:
+        if next_buy_exchange == next_sell_exchange:
+            raise HTTPException(
+                status_code=422,
+                detail="Buy and sell exchanges must be different",
+            )
+        await _validate_exchanges(session, next_buy_exchange, next_sell_exchange)
+
+    for field, value in updates.items():
         setattr(trade_watch, field, value)
+
+    if exchanges_changed:
+        _clear_live_trade_watch_values(trade_watch)
+        await session.execute(
+            delete(TradeWatchSpreadSnapshot).where(
+                TradeWatchSpreadSnapshot.trade_watch_id == trade_watch.id
+            )
+        )
+
     await session.commit()
     await session.refresh(trade_watch)
     return trade_watch
@@ -118,3 +144,16 @@ async def _validate_exchanges(
             status_code=422,
             detail=f"Unknown exchange: {', '.join(sorted(missing))}",
         )
+
+
+def _clear_live_trade_watch_values(trade_watch: TradeWatch) -> None:
+    trade_watch.buy_price = None
+    trade_watch.sell_price = None
+    trade_watch.price_spread_percent = None
+    trade_watch.buy_funding_rate_percent = None
+    trade_watch.sell_funding_rate_percent = None
+    trade_watch.funding_spread_percent = None
+    trade_watch.pnl_usdt = None
+    trade_watch.pnl_percent = None
+    trade_watch.last_updated_at = None
+    trade_watch.last_error = None

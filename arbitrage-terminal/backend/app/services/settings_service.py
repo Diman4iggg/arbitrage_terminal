@@ -29,6 +29,10 @@ class SettingsService:
                 "telegram_notifications_enabled",
                 settings.telegram_notifications_enabled,
             ),
+            opportunity_notifications_enabled=stored_settings.get(
+                "opportunity_notifications_enabled",
+                True,
+            ),
             telegram_chat_id=stored_settings.get("telegram_chat_id", settings.telegram_chat_id),
             notification_cooldown_seconds=stored_settings.get(
                 "notification_cooldown_seconds",
@@ -50,4 +54,3 @@ class SettingsService:
             self.session.add(AppSetting(key=key, value=value))
         else:
             item.value = value
-

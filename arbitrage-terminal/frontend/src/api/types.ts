@@ -62,6 +62,7 @@ export interface RuntimeSettings {
   threshold_per_pair: Record<string, number>
   update_interval_seconds: number
   telegram_notifications_enabled: boolean
+  opportunity_notifications_enabled: boolean
   telegram_chat_id: string
   notification_cooldown_seconds: number
 }
@@ -146,6 +147,8 @@ export interface TradeWatchCreate {
 }
 
 export interface TradeWatchUpdate {
+  buy_exchange?: string
+  sell_exchange?: string
   enabled?: boolean
   notifications_enabled?: boolean
   position_size_coins?: number

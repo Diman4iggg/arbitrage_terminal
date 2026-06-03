@@ -29,6 +29,8 @@ class TradeWatchCreate(BaseModel):
 
 
 class TradeWatchUpdate(BaseModel):
+    buy_exchange: str | None = None
+    sell_exchange: str | None = None
     enabled: bool | None = None
     notifications_enabled: bool | None = None
     price_alert_threshold_percent: Decimal | None = Field(default=None, ge=0)
@@ -36,6 +38,16 @@ class TradeWatchUpdate(BaseModel):
     buy_entry_price: Decimal | None = Field(default=None, gt=0)
     sell_entry_price: Decimal | None = Field(default=None, gt=0)
     position_size_coins: Decimal | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_exchanges(self) -> "TradeWatchUpdate":
+        if (
+            self.buy_exchange is not None
+            and self.sell_exchange is not None
+            and self.buy_exchange == self.sell_exchange
+        ):
+            raise ValueError("Buy and sell exchanges must be different")
+        return self
 
 
 class TradeWatchRead(BaseModel):

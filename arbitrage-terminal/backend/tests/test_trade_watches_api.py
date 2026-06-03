@@ -146,6 +146,68 @@ async def test_update_trade_watch_changes_threshold_and_position_size(
     assert response.json()["funding_alert_threshold_percent"] == "0.030000"
 
 
+async def test_update_trade_watch_changes_exchanges_and_resets_live_state(
+    session: AsyncSession,
+) -> None:
+    session.add_all(
+        [
+            Exchange(name="Binance", slug="binance", exchange_type=ExchangeType.CEX),
+            Exchange(name="Bybit", slug="bybit", exchange_type=ExchangeType.CEX),
+            Exchange(name="OKX", slug="okx", exchange_type=ExchangeType.CEX),
+            Exchange(name="Bitget", slug="bitget", exchange_type=ExchangeType.CEX),
+        ]
+    )
+    trade_watch = TradeWatch(
+        symbol="BTC/USDT",
+        buy_exchange="Binance",
+        sell_exchange="Bybit",
+        buy_entry_price=Decimal("67000"),
+        sell_entry_price=Decimal("67500"),
+        position_size_coins=Decimal("0.25"),
+        buy_price=Decimal("67100"),
+        sell_price=Decimal("67600"),
+        price_spread_percent=Decimal("0.745"),
+        price_alert_threshold_percent=Decimal("0.1"),
+    )
+    session.add(trade_watch)
+    await session.flush()
+    session.add(
+        TradeWatchSpreadSnapshot(
+            trade_watch_id=trade_watch.id,
+            spread_percent=Decimal("0.745"),
+            timestamp=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+    async def override_db_session() -> AsyncIterator[AsyncSession]:
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_db_session
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.patch(
+                f"/api/trade-watches/{trade_watch.id}",
+                json={
+                    "buy_exchange": "OKX",
+                    "sell_exchange": "Bitget",
+                    "price_alert_threshold_percent": 0.25,
+                },
+            )
+            history = await client.get(f"/api/trade-watches/{trade_watch.id}/spread-history")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["buy_exchange"] == "OKX"
+    assert response.json()["sell_exchange"] == "Bitget"
+    assert response.json()["price_alert_threshold_percent"] == "0.250000"
+    assert response.json()["buy_price"] is None
+    assert response.json()["sell_price"] is None
+    assert response.json()["price_spread_percent"] is None
+    assert history.json()["points"] == []
+
+
 async def test_get_trade_watch_spread_history_returns_recorded_points(
     session: AsyncSession,
 ) -> None:

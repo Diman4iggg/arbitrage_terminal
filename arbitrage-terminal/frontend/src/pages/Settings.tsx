@@ -44,6 +44,15 @@ export function Settings() {
     },
     onError: () => showToast("danger", "Unable to update Telegram alert state."),
   })
+  const updateOpportunityAlertsEnabled = useMutation({
+    mutationFn: (enabled: boolean) => terminalApi.updateSettings({ opportunity_notifications_enabled: enabled }),
+    onSuccess: (data) => {
+      setForm(data)
+      showToast("success", data.opportunity_notifications_enabled ? "Opportunity alerts enabled." : "Opportunity alerts disabled.")
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
+    onError: () => showToast("danger", "Unable to update opportunity alert state."),
+  })
   const updatePair = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updatePair(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pairs"] }) })
   const createPair = useMutation({
     mutationFn: terminalApi.createPair,
@@ -86,6 +95,17 @@ export function Settings() {
               label="Enable Telegram alerts"
               checked={form.telegram_notifications_enabled}
               onChange={(enabled) => updateTelegramEnabled.mutate(enabled)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-md border border-terminal-700 bg-terminal-950 p-3">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Opportunity alerts</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">Disable this to receive Telegram notifications only from My Trades.</p>
+            </div>
+            <Switch
+              label="Enable opportunity alerts"
+              checked={form.opportunity_notifications_enabled}
+              onChange={(enabled) => updateOpportunityAlertsEnabled.mutate(enabled)}
             />
           </div>
           <Field label="Telegram chat ID"><Input value={form.telegram_chat_id} onChange={(e) => setForm({ ...form, telegram_chat_id: e.target.value })} placeholder="Configured in Stage 6" /></Field>
