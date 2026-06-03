@@ -1,5 +1,7 @@
 export type ExchangeHealth = "unknown" | "online" | "offline" | "error"
 export type OpportunityStatus = "active" | "expired"
+export type AlertCondition = "above" | "below"
+export type TargetPriceSource = "buy" | "sell"
 
 export interface MonitoringStatus {
   scheduler_enabled: boolean
@@ -119,7 +121,12 @@ export interface TradeWatch {
   position_size_coins: string | null
   entry_spread_percent: string | null
   price_alert_threshold_percent: string | null
+  price_alert_condition: AlertCondition
   funding_alert_threshold_percent: string | null
+  funding_alert_condition: AlertCondition
+  target_price_alert_value: string | null
+  target_price_alert_condition: AlertCondition
+  target_price_alert_source: TargetPriceSource
   buy_price: string | null
   sell_price: string | null
   price_spread_percent: string | null
@@ -143,7 +150,12 @@ export interface TradeWatchCreate {
   sell_entry_price: number
   position_size_coins: number
   price_alert_threshold_percent: number | null
+  price_alert_condition: AlertCondition
   funding_alert_threshold_percent: number | null
+  funding_alert_condition: AlertCondition
+  target_price_alert_value: number | null
+  target_price_alert_condition: AlertCondition
+  target_price_alert_source: TargetPriceSource
 }
 
 export interface TradeWatchUpdate {
@@ -151,9 +163,16 @@ export interface TradeWatchUpdate {
   sell_exchange?: string
   enabled?: boolean
   notifications_enabled?: boolean
+  buy_entry_price?: number
+  sell_entry_price?: number
   position_size_coins?: number
   price_alert_threshold_percent?: number | null
+  price_alert_condition?: AlertCondition
   funding_alert_threshold_percent?: number | null
+  funding_alert_condition?: AlertCondition
+  target_price_alert_value?: number | null
+  target_price_alert_condition?: AlertCondition
+  target_price_alert_source?: TargetPriceSource
 }
 
 export interface TradeWatchSpreadHistory {

@@ -102,7 +102,7 @@ def format_opportunity_message(opportunity: Opportunity) -> str:
 
 def format_trade_watch_message(trade_watch: TradeWatch, reasons: list[str]) -> str:
     detected_at = (trade_watch.last_updated_at or datetime.now(UTC)).astimezone(UTC)
-    reason_text = ", ".join(reason.replace("_", " ") for reason in reasons)
+    reason_text = ", ".join(_format_trade_watch_reason(reason) for reason in reasons)
     return (
         "<b>My Trades alert</b>\n\n"
         f"Pair: <code>{html.escape(trade_watch.symbol)} PERP</code>\n"
@@ -110,7 +110,12 @@ def format_trade_watch_message(trade_watch: TradeWatch, reasons: list[str]) -> s
         f"<b>{html.escape(trade_watch.sell_exchange)}</b>\n"
         f"Entry spread: <b>{_format_optional_percent(_entry_spread_percent(trade_watch))}</b>\n"
         f"Price spread: <b>{_format_optional_percent(trade_watch.price_spread_percent)}</b>\n"
+        f"Price rule: <code>{html.escape(_format_alert_rule(trade_watch.price_alert_condition, trade_watch.price_alert_threshold_percent))}</code>\n"
+        f"Target price: <b>{_format_optional_decimal(_target_price_value(trade_watch))}</b> "
+        f"({html.escape(trade_watch.target_price_alert_source)} price)\n"
+        f"Target rule: <code>{html.escape(_format_price_alert_rule(trade_watch))}</code>\n"
         f"Funding spread: <b>{_format_optional_percent(trade_watch.funding_spread_percent)}</b>\n"
+        f"Funding rule: <code>{html.escape(_format_alert_rule(trade_watch.funding_alert_condition, trade_watch.funding_alert_threshold_percent))}</code>\n"
         f"Position PnL: <b>{_format_optional_decimal(trade_watch.pnl_usdt)} USDT</b> "
         f"({_format_optional_percent(trade_watch.pnl_percent)})\n"
         f"Triggered by: <code>{html.escape(reason_text)}</code>\n"
@@ -129,6 +134,30 @@ def _format_optional_percent(value: Decimal | None) -> str:
 
 def _format_optional_decimal(value: Decimal | None) -> str:
     return "n/a" if value is None else f"{value:.4f}"
+
+
+def _format_alert_rule(condition: str, threshold: Decimal | None) -> str:
+    if threshold is None:
+        return "disabled"
+    operator = "above" if condition == "above" else "below"
+    return f"{operator} {_format_optional_percent(threshold)}"
+
+
+def _format_price_alert_rule(trade_watch: TradeWatch) -> str:
+    if trade_watch.target_price_alert_value is None:
+        return "disabled"
+    operator = "above" if trade_watch.target_price_alert_condition == "above" else "below"
+    return f"{trade_watch.target_price_alert_source} price {operator} {_format_decimal(trade_watch.target_price_alert_value)}"
+
+
+def _format_trade_watch_reason(reason: str) -> str:
+    return reason.replace("_", " ")
+
+
+def _target_price_value(trade_watch: TradeWatch) -> Decimal | None:
+    if trade_watch.target_price_alert_source == "sell":
+        return trade_watch.sell_price
+    return trade_watch.buy_price
 
 
 def _entry_spread_percent(trade_watch: TradeWatch) -> Decimal | None:

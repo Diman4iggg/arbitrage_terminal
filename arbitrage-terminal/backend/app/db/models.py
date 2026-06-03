@@ -171,7 +171,32 @@ class TradeWatch(TimestampMixin, Base):
     sell_entry_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
     position_size_coins: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
     price_alert_threshold_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    price_alert_condition: Mapped[str] = mapped_column(
+        String(10),
+        default="above",
+        server_default="above",
+        nullable=False,
+    )
     funding_alert_threshold_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
+    funding_alert_condition: Mapped[str] = mapped_column(
+        String(10),
+        default="above",
+        server_default="above",
+        nullable=False,
+    )
+    target_price_alert_value: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
+    target_price_alert_condition: Mapped[str] = mapped_column(
+        String(10),
+        default="above",
+        server_default="above",
+        nullable=False,
+    )
+    target_price_alert_source: Mapped[str] = mapped_column(
+        String(10),
+        default="buy",
+        server_default="buy",
+        nullable=False,
+    )
     buy_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
     sell_price: Mapped[Decimal | None] = mapped_column(Numeric(30, 12))
     price_spread_percent: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))

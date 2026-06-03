@@ -31,6 +31,9 @@ export const terminalApi = {
     (await api.patch<TradingPair>(`/pairs/${id}`, { enabled })).data,
   createPair: async (symbol: string) =>
     (await api.post<TradingPair>("/pairs", { symbol })).data,
+  deletePair: async (id: number) => {
+    await api.delete(`/pairs/${id}`)
+  },
   getOpportunities: async (params?: Record<string, string | number>) =>
     (await api.get<Opportunity[]>("/opportunities", { params })).data,
   getSettings: async () => (await api.get<RuntimeSettings>("/settings")).data,
@@ -49,7 +52,7 @@ export const terminalApi = {
     (await api.post<TradeWatch>("/trade-watches", payload)).data,
   updateTradeWatch: async (id: number, payload: TradeWatchUpdate) =>
     (await api.patch<TradeWatch>(`/trade-watches/${id}`, payload)).data,
-  getTradeWatchSpreadHistory: async (id: number, minutes = 30) =>
+  getTradeWatchSpreadHistory: async (id: number, minutes = 1440) =>
     (await api.get<TradeWatchSpreadHistory>(`/trade-watches/${id}/spread-history`, { params: { minutes } })).data,
   deleteTradeWatch: async (id: number) => {
     await api.delete(`/trade-watches/${id}`)

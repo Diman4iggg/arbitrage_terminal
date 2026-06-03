@@ -78,3 +78,56 @@ async def test_trade_watch_notification_has_independent_cooldown_keys(
     assert first_count == 2
     assert second_count == 0
     assert sender.calls == 1
+
+
+async def test_trade_watch_notifications_support_directional_alert_rules(
+    session: AsyncSession,
+) -> None:
+    sender = FakeSender()
+    trade_watch = TradeWatch(
+        symbol="BTC/USDT",
+        buy_exchange="Binance",
+        sell_exchange="Bybit",
+        price_spread_percent=Decimal("-0.20"),
+        funding_spread_percent=Decimal("1.20"),
+        price_alert_threshold_percent=Decimal("-0.10"),
+        price_alert_condition="below",
+        funding_alert_threshold_percent=Decimal("1"),
+        funding_alert_condition="above",
+    )
+    session.add(trade_watch)
+    await session.commit()
+
+    count = await NotificationService(session, sender).notify_trade_watch(
+        trade_watch,
+        cooldown_seconds=300,
+    )
+
+    assert count == 2
+    assert sender.calls == 1
+
+
+async def test_trade_watch_notification_supports_target_price_rule(
+    session: AsyncSession,
+) -> None:
+    sender = FakeSender()
+    trade_watch = TradeWatch(
+        symbol="BTC/USDT",
+        buy_exchange="Binance",
+        sell_exchange="Bybit",
+        buy_price=Decimal("67100"),
+        sell_price=Decimal("67200"),
+        target_price_alert_value=Decimal("67000"),
+        target_price_alert_condition="above",
+        target_price_alert_source="buy",
+    )
+    session.add(trade_watch)
+    await session.commit()
+
+    count = await NotificationService(session, sender).notify_trade_watch(
+        trade_watch,
+        cooldown_seconds=300,
+    )
+
+    assert count == 1
+    assert sender.calls == 1

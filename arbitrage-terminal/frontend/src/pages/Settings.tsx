@@ -54,6 +54,14 @@ export function Settings() {
     onError: () => showToast("danger", "Unable to update opportunity alert state."),
   })
   const updatePair = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => terminalApi.updatePair(id, enabled), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pairs"] }) })
+  const deletePair = useMutation({
+    mutationFn: terminalApi.deletePair,
+    onSuccess: () => {
+      showToast("success", "Pair deleted from monitoring.")
+      queryClient.invalidateQueries({ queryKey: ["pairs"] })
+    },
+    onError: () => showToast("danger", "Unable to delete pair."),
+  })
   const createPair = useMutation({
     mutationFn: terminalApi.createPair,
     onSuccess: () => {
@@ -70,6 +78,8 @@ export function Settings() {
 
   if (!form || settings.isLoading) return <Skeleton className="h-96" />
   const filteredPairs = pairs.data?.filter((item) => item.symbol.toLowerCase().includes(pairSearch.trim().toLowerCase()))
+  const normalizedNewPair = normalizePairInput(newPair)
+  const newPairIsValid = normalizedNewPair === "" || isPairInputValid(normalizedNewPair)
 
   function showToast(tone: "success" | "danger", message: string) {
     setToast({ tone, message })
@@ -116,13 +126,14 @@ export function Settings() {
           {exchanges.data?.map((item) => <ToggleRow key={item.id} label={item.name} checked={item.enabled} onChange={(enabled) => updateExchange.mutate({ id: item.id, enabled })} />)}
         </SettingsCard>
         <SettingsCard title="Tracked perpetual pairs">
-          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); createPair.mutate(newPair) }}>
+          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); if (newPairIsValid) createPair.mutate(normalizedNewPair) }}>
             <Input value={newPair} onChange={(event) => setNewPair(event.target.value)} placeholder="Add coin, e.g. SEI or TAO/USDT" required />
-            <Button type="submit" disabled={createPair.isPending}>{createPair.isPending ? "Adding..." : "Add pair"}</Button>
+            <Button type="submit" disabled={createPair.isPending || !newPairIsValid || !normalizedNewPair}>{createPair.isPending ? "Adding..." : "Add pair"}</Button>
           </form>
+          {!newPairIsValid && <p className="text-xs leading-5 text-rose-300">Use a coin ticker like SEI or a USDT pair like TAO/USDT. Letters and digits only, 2-20 chars.</p>}
           <p className="text-xs leading-5 text-zinc-500">Add any USDT perpetual symbol. Unsupported markets are skipped per exchange without stopping monitoring.</p>
           <Input value={pairSearch} onChange={(event) => setPairSearch(event.target.value)} placeholder="Search existing pairs, e.g. BTC or PEPE" />
-          {filteredPairs?.length ? filteredPairs.map((item) => <ToggleRow key={item.id} label={item.symbol} checked={item.enabled} onChange={(enabled) => updatePair.mutate({ id: item.id, enabled })} />) : <p className="py-3 text-center text-xs text-zinc-500">No matching pairs.</p>}
+          {filteredPairs?.length ? filteredPairs.map((item) => <PairRow key={item.id} label={item.symbol} checked={item.enabled} onToggle={(enabled) => updatePair.mutate({ id: item.id, enabled })} onDelete={() => { if (window.confirm(`Delete ${item.symbol} from monitoring?`)) deletePair.mutate(item.id) }} />) : <p className="py-3 text-center text-xs text-zinc-500">No matching pairs.</p>}
         </SettingsCard>
       </div>
     </>
@@ -139,4 +150,28 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return <div className="flex items-center justify-between gap-4 text-sm text-zinc-300"><span>{label}</span><Switch checked={checked} onChange={onChange} label={`Toggle ${label}`} /></div>
+}
+
+function PairRow({ label, checked, onToggle, onDelete }: { label: string; checked: boolean; onToggle: (checked: boolean) => void; onDelete: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4 text-sm text-zinc-300">
+      <span>{label}</span>
+      <div className="flex items-center gap-3">
+        <Switch checked={checked} onChange={onToggle} label={`Toggle ${label}`} />
+        <Button onClick={onDelete} className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10">Delete</Button>
+      </div>
+    </div>
+  )
+}
+
+function normalizePairInput(value: string) {
+  const symbol = value.trim().toUpperCase()
+  return symbol && !symbol.includes("/") ? `${symbol}/USDT` : symbol
+}
+
+function isPairInputValid(symbol: string) {
+  const parts = symbol.split("/")
+  if (parts.length !== 2) return false
+  const [baseAsset, quoteAsset] = parts
+  return /^[A-Z0-9]{2,20}$/.test(baseAsset ?? "") && quoteAsset === "USDT"
 }

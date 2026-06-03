@@ -1,11 +1,12 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
-from app.db.models import Exchange, TradeWatch, TradeWatchSpreadSnapshot
+from app.db.models import Exchange, PriceSnapshot, TradeWatch, TradeWatchSpreadSnapshot
 from app.schemas.trade_watch import (
     TradeWatchCreate,
     TradeWatchRead,
@@ -44,13 +45,27 @@ async def create_trade_watch(
 )
 async def get_trade_watch_spread_history(
     trade_watch_id: int,
-    minutes: int = Query(default=30, ge=1, le=1440),
+    minutes: int = Query(default=1440, ge=1, le=1440),
     session: AsyncSession = Depends(get_db_session),
 ) -> TradeWatchSpreadHistoryRead:
     trade_watch = await session.get(TradeWatch, trade_watch_id)
     if trade_watch is None:
         raise HTTPException(status_code=404, detail="Trade watch not found")
     cutoff = datetime.now(UTC) - timedelta(minutes=minutes)
+    price_snapshot_points = await _build_history_from_price_snapshots(
+        session=session,
+        trade_watch=trade_watch,
+        cutoff=cutoff,
+    )
+    if price_snapshot_points:
+        return TradeWatchSpreadHistoryRead(
+            trade_watch_id=trade_watch.id,
+            symbol=trade_watch.symbol,
+            buy_exchange=trade_watch.buy_exchange,
+            sell_exchange=trade_watch.sell_exchange,
+            points=price_snapshot_points,
+        )
+
     result = await session.execute(
         select(TradeWatchSpreadSnapshot)
         .where(
@@ -157,3 +172,36 @@ def _clear_live_trade_watch_values(trade_watch: TradeWatch) -> None:
     trade_watch.pnl_percent = None
     trade_watch.last_updated_at = None
     trade_watch.last_error = None
+
+
+async def _build_history_from_price_snapshots(
+    session: AsyncSession,
+    trade_watch: TradeWatch,
+    cutoff: datetime,
+) -> list[TradeWatchSpreadPoint]:
+    result = await session.execute(
+        select(PriceSnapshot)
+        .where(
+            PriceSnapshot.symbol == trade_watch.symbol,
+            PriceSnapshot.exchange_name.in_([trade_watch.buy_exchange, trade_watch.sell_exchange]),
+            PriceSnapshot.timestamp >= cutoff,
+        )
+        .order_by(PriceSnapshot.timestamp)
+    )
+    buckets: dict[datetime, dict[str, PriceSnapshot]] = {}
+    for snapshot in result.scalars():
+        timestamp = snapshot.timestamp
+        bucket = timestamp.replace(second=(timestamp.second // 10) * 10, microsecond=0)
+        buckets.setdefault(bucket, {})[snapshot.exchange_name] = snapshot
+
+    points: list[TradeWatchSpreadPoint] = []
+    for timestamp, snapshots_by_exchange in buckets.items():
+        buy_snapshot = snapshots_by_exchange.get(trade_watch.buy_exchange)
+        sell_snapshot = snapshots_by_exchange.get(trade_watch.sell_exchange)
+        if buy_snapshot is None or sell_snapshot is None or buy_snapshot.last_price <= 0:
+            continue
+        spread_percent = (
+            (sell_snapshot.last_price - buy_snapshot.last_price) / buy_snapshot.last_price
+        ) * Decimal("100")
+        points.append(TradeWatchSpreadPoint(timestamp=timestamp, spread_percent=spread_percent))
+    return points

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 import { terminalApi } from "../api/client"
-import type { TradeWatch, TradeWatchCreate, TradeWatchUpdate } from "../api/types"
+import type { AlertCondition, TargetPriceSource, TradeWatch, TradeWatchCreate, TradeWatchUpdate } from "../api/types"
 import { PageHeader } from "../components/PageHeader"
 import { Badge, Button, Card, CardContent, CardHeader, Input, Select, Skeleton, Switch } from "../components/ui"
 import { formatDate, formatPrice, formatSpread } from "../lib/format"
@@ -18,7 +18,27 @@ const initialForm: TradeWatchCreate = {
   sell_entry_price: 0,
   position_size_coins: 0,
   price_alert_threshold_percent: 0.1,
+  price_alert_condition: "above",
   funding_alert_threshold_percent: 0.01,
+  funding_alert_condition: "above",
+  target_price_alert_value: null,
+  target_price_alert_condition: "above",
+  target_price_alert_source: "buy",
+}
+const TRADE_SPREAD_HISTORY_MINUTES = 1440
+type TradeWatchEditForm = {
+  buy_exchange: string
+  sell_exchange: string
+  buy_entry_price: string
+  sell_entry_price: string
+  position_size_coins: string
+  price_alert_threshold_percent: string
+  price_alert_condition: AlertCondition
+  funding_alert_threshold_percent: string
+  funding_alert_condition: AlertCondition
+  target_price_alert_value: string
+  target_price_alert_condition: AlertCondition
+  target_price_alert_source: TargetPriceSource
 }
 
 export function MyTrades() {
@@ -42,7 +62,12 @@ export function MyTrades() {
   const update = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: TradeWatchUpdate }) =>
       terminalApi.updateTradeWatch(id, payload),
-    onSuccess: refresh,
+    onSuccess: (updatedWatch) => {
+      queryClient.setQueryData<TradeWatch[]>(["trade-watches"], (current) =>
+        current?.map((watch) => (watch.id === updatedWatch.id ? updatedWatch : watch)) ?? current,
+      )
+      refresh()
+    },
   })
   const remove = useMutation({ mutationFn: terminalApi.deleteTradeWatch, onSuccess: refresh })
 
@@ -52,16 +77,23 @@ export function MyTrades() {
       <Card className="mb-4">
         <CardHeader><h2 className="text-sm font-semibold">Add monitored direction</h2></CardHeader>
         <CardContent>
-          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={(event) => { event.preventDefault(); create.mutate(form) }}>
+          <form className="grid gap-4" onSubmit={(event) => { event.preventDefault(); create.mutate(form) }}>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Coin"><Input required value={form.symbol} onChange={(event) => setForm({ ...form, symbol: event.target.value })} placeholder="BTC or BTC/USDT" /></Field>
             <Field label="Buy exchange"><ExchangeSelect exchanges={exchangeNames} value={form.buy_exchange} onChange={(buy_exchange) => setForm({ ...form, buy_exchange })} /></Field>
             <Field label="Sell exchange"><ExchangeSelect exchanges={exchangeNames} value={form.sell_exchange} onChange={(sell_exchange) => setForm({ ...form, sell_exchange })} /></Field>
             <Field label="Long entry price"><RequiredNumber value={form.buy_entry_price} onChange={(buy_entry_price) => setForm({ ...form, buy_entry_price })} /></Field>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Field label="Short entry price"><RequiredNumber value={form.sell_entry_price} onChange={(sell_entry_price) => setForm({ ...form, sell_entry_price })} /></Field>
             <Field label="Position size, coins"><RequiredNumber value={form.position_size_coins} onChange={(position_size_coins) => setForm({ ...form, position_size_coins })} /></Field>
-            <Field label="Price alert %"><OptionalNumber value={form.price_alert_threshold_percent} onChange={(price_alert_threshold_percent) => setForm({ ...form, price_alert_threshold_percent })} /></Field>
-            <Field label="Funding alert %"><OptionalNumber value={form.funding_alert_threshold_percent} onChange={(funding_alert_threshold_percent) => setForm({ ...form, funding_alert_threshold_percent })} /></Field>
-            <div className="flex items-end gap-3">
+            <Field className="xl:col-span-2" label="Price alert rule"><AlertRuleInput condition={form.price_alert_condition} value={form.price_alert_threshold_percent} onConditionChange={(price_alert_condition) => setForm({ ...form, price_alert_condition })} onValueChange={(price_alert_threshold_percent) => setForm({ ...form, price_alert_threshold_percent })} /></Field>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Field className="xl:col-span-2" label="Funding alert rule"><AlertRuleInput condition={form.funding_alert_condition} value={form.funding_alert_threshold_percent} onConditionChange={(funding_alert_condition) => setForm({ ...form, funding_alert_condition })} onValueChange={(funding_alert_threshold_percent) => setForm({ ...form, funding_alert_threshold_percent })} /></Field>
+            <Field className="xl:col-span-2" label="Target price alert"><TargetPriceRuleInput source={form.target_price_alert_source} condition={form.target_price_alert_condition} value={form.target_price_alert_value} onSourceChange={(target_price_alert_source) => setForm({ ...form, target_price_alert_source })} onConditionChange={(target_price_alert_condition) => setForm({ ...form, target_price_alert_condition })} onValueChange={(target_price_alert_value) => setForm({ ...form, target_price_alert_value })} /></Field>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-terminal-700 pt-3">
               <Switch label="Enable alerts" checked={form.notifications_enabled} onChange={(notifications_enabled) => setForm({ ...form, notifications_enabled })} />
               <Button type="submit" disabled={create.isPending || form.buy_exchange === form.sell_exchange || form.buy_entry_price <= 0 || form.sell_entry_price <= 0 || form.position_size_coins <= 0}><Plus className="mr-1 inline h-3.5 w-3.5" />Add</Button>
             </div>
@@ -87,21 +119,23 @@ function WatchCard({ watch, exchanges, onUpdate, onDelete }: { watch: TradeWatch
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState(() => makeEditForm(watch))
   const history = useQuery({
-    queryKey: ["trade-watch-spread-history", watch.id],
-    queryFn: () => terminalApi.getTradeWatchSpreadHistory(watch.id),
+    queryKey: ["trade-watch-spread-history", watch.id, TRADE_SPREAD_HISTORY_MINUTES],
+    queryFn: () => terminalApi.getTradeWatchSpreadHistory(watch.id, TRADE_SPREAD_HISTORY_MINUTES),
     refetchInterval: 10_000,
   })
   const chartData = history.data?.points.map((point) => ({
-    timestamp: new Date(point.timestamp).toLocaleTimeString(),
+    timestamp: new Date(point.timestamp).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
     spread: Number(point.spread_percent),
   })) ?? []
+  const editPayload = buildEditPayload(editForm)
   const save = () => {
-    onUpdate(editForm)
+    if (!editPayload) return
+    onUpdate(editPayload)
     setEditing(false)
   }
   const availableExchanges = Array.from(new Set([...exchanges, watch.buy_exchange, watch.sell_exchange]))
-  const selectedBuyExchange = editForm.buy_exchange ?? watch.buy_exchange
-  const selectedSellExchange = editForm.sell_exchange ?? watch.sell_exchange
+  const selectedBuyExchange = editForm.buy_exchange || watch.buy_exchange
+  const selectedSellExchange = editForm.sell_exchange || watch.sell_exchange
 
   return (
     <Card>
@@ -126,19 +160,23 @@ function WatchCard({ watch, exchanges, onUpdate, onDelete }: { watch: TradeWatch
         {editing && <div className="mt-4 grid gap-3 rounded-md border border-terminal-700 bg-terminal-950 p-3 sm:grid-cols-3">
           <Field label="Buy exchange"><ExchangeSelect exchanges={availableExchanges} value={selectedBuyExchange} onChange={(buy_exchange) => setEditForm({ ...editForm, buy_exchange })} /></Field>
           <Field label="Sell exchange"><ExchangeSelect exchanges={availableExchanges} value={selectedSellExchange} onChange={(sell_exchange) => setEditForm({ ...editForm, sell_exchange })} /></Field>
-          <Field label="Position size, coins"><RequiredNumber value={editForm.position_size_coins ?? 0} onChange={(position_size_coins) => setEditForm({ ...editForm, position_size_coins })} /></Field>
-          <Field label="Price alert %"><OptionalNumber value={editForm.price_alert_threshold_percent ?? null} onChange={(price_alert_threshold_percent) => setEditForm({ ...editForm, price_alert_threshold_percent })} /></Field>
-          <Field label="Funding alert %"><OptionalNumber value={editForm.funding_alert_threshold_percent ?? null} onChange={(funding_alert_threshold_percent) => setEditForm({ ...editForm, funding_alert_threshold_percent })} /></Field>
-          <div className="flex gap-2 sm:col-span-3"><Button onClick={save} disabled={!editForm.position_size_coins || editForm.position_size_coins <= 0 || selectedBuyExchange === selectedSellExchange}><Save className="mr-1 inline h-3.5 w-3.5" />Save changes</Button><Button onClick={() => setEditing(false)}><X className="mr-1 inline h-3.5 w-3.5" />Cancel</Button></div>
+          <Field label="Long entry price"><EditNumber value={editForm.buy_entry_price} onChange={(buy_entry_price) => setEditForm({ ...editForm, buy_entry_price })} required /></Field>
+          <Field label="Short entry price"><EditNumber value={editForm.sell_entry_price} onChange={(sell_entry_price) => setEditForm({ ...editForm, sell_entry_price })} required /></Field>
+          <Field label="Position size, coins"><EditNumber value={editForm.position_size_coins} onChange={(position_size_coins) => setEditForm({ ...editForm, position_size_coins })} required /></Field>
+          <Field className="sm:col-span-3" label="Price alert rule"><EditAlertRuleInput condition={editForm.price_alert_condition} value={editForm.price_alert_threshold_percent} onConditionChange={(price_alert_condition) => setEditForm({ ...editForm, price_alert_condition })} onValueChange={(price_alert_threshold_percent) => setEditForm({ ...editForm, price_alert_threshold_percent })} /></Field>
+          <Field className="sm:col-span-3" label="Funding alert rule"><EditAlertRuleInput condition={editForm.funding_alert_condition} value={editForm.funding_alert_threshold_percent} onConditionChange={(funding_alert_condition) => setEditForm({ ...editForm, funding_alert_condition })} onValueChange={(funding_alert_threshold_percent) => setEditForm({ ...editForm, funding_alert_threshold_percent })} /></Field>
+          <Field className="sm:col-span-3" label="Target price alert"><EditTargetPriceRuleInput source={editForm.target_price_alert_source} condition={editForm.target_price_alert_condition} value={editForm.target_price_alert_value} onSourceChange={(target_price_alert_source) => setEditForm({ ...editForm, target_price_alert_source })} onConditionChange={(target_price_alert_condition) => setEditForm({ ...editForm, target_price_alert_condition })} onValueChange={(target_price_alert_value) => setEditForm({ ...editForm, target_price_alert_value })} /></Field>
+          <div className="flex gap-2 sm:col-span-3"><Button type="button" onClick={save} disabled={!editPayload}><Save className="mr-1 inline h-3.5 w-3.5" />Save changes</Button><Button type="button" onClick={() => setEditing(false)}><X className="mr-1 inline h-3.5 w-3.5" />Cancel</Button></div>
         </div>}
         <div className="mt-4 border-t border-terminal-700 pt-3">
-          <p className="mb-2 text-[10px] uppercase tracking-wider text-zinc-600">Spread history, 30 min</p>
-          {history.isLoading ? <Skeleton className="h-32" /> : chartData.length ? <TradeSpreadChart data={chartData} /> : <div className="flex h-32 items-center justify-center rounded-md border border-terminal-700 bg-terminal-950 text-xs text-zinc-600">Waiting for spread snapshots...</div>}
+          <p className="mb-2 text-[10px] uppercase tracking-wider text-zinc-600">Spread history, last 24h</p>
+          {history.isLoading ? <Skeleton className="h-32" /> : chartData.length ? <TradeSpreadChart data={chartData} /> : <div className="flex h-32 items-center justify-center rounded-md border border-terminal-700 bg-terminal-950 text-xs text-zinc-600">Waiting for spread snapshots from the last 24h...</div>}
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-terminal-700 pt-3 text-xs">
           <div className="flex flex-wrap gap-3 text-zinc-500">
-            <span>Price alert: <b className="text-zinc-300">{formatSpread(watch.price_alert_threshold_percent)}</b></span>
-            <span>Funding alert: <b className="text-zinc-300">{formatSpread(watch.funding_alert_threshold_percent)}</b></span>
+            <span>Price alert: <b className="text-zinc-300">{formatAlertRule(watch.price_alert_condition, watch.price_alert_threshold_percent)}</b></span>
+            <span>Funding alert: <b className="text-zinc-300">{formatAlertRule(watch.funding_alert_condition, watch.funding_alert_threshold_percent)}</b></span>
+            <span>Target price alert: <b className="text-zinc-300">{formatTargetPriceRule(watch)}</b></span>
             <span>Updated: <b className="text-zinc-300">{formatDate(watch.last_updated_at)}</b></span>
           </div>
           <div className="flex items-center gap-2 text-zinc-400"><BellRing className="h-3.5 w-3.5" /><Switch label={`Alerts for ${watch.symbol}`} checked={watch.notifications_enabled} onChange={(notifications_enabled) => onUpdate({ notifications_enabled })} /></div>
@@ -149,8 +187,8 @@ function WatchCard({ watch, exchanges, onUpdate, onDelete }: { watch: TradeWatch
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="mb-2 block text-xs text-zinc-500">{label}</span>{children}</label>
+function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
+  return <label className={`block ${className}`}><span className="mb-2 block text-xs text-zinc-500">{label}</span>{children}</label>
 }
 
 function ExchangeSelect({ exchanges, value, onChange }: { exchanges: string[]; value: string; onChange: (value: string) => void }) {
@@ -158,21 +196,147 @@ function ExchangeSelect({ exchanges, value, onChange }: { exchanges: string[]; v
 }
 
 function OptionalNumber({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
-  return <Input type="number" min="0" step="0.001" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? null : Number(event.target.value))} placeholder="disabled" />
+  return <Input type="number" step="any" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? null : Number(event.target.value))} placeholder="disabled" />
+}
+
+function OptionalPositiveNumber({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
+  return <Input type="number" min="0.00000001" step="any" value={value ?? ""} onChange={(event) => onChange(event.target.value === "" ? null : Number(event.target.value))} placeholder="disabled" />
 }
 
 function RequiredNumber({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return <Input required type="number" min="0.00000001" step="any" value={value || ""} onChange={(event) => onChange(Number(event.target.value))} placeholder="Required" />
 }
 
-function makeEditForm(watch: TradeWatch): TradeWatchUpdate {
+function EditNumber({ value, onChange, required = false, placeholder = "Required" }: { value: string; onChange: (value: string) => void; required?: boolean; placeholder?: string }) {
+  return <Input required={required} type="number" min={required ? "0.00000001" : undefined} step="any" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+}
+
+function AlertRuleInput({ condition, value, onConditionChange, onValueChange }: { condition: AlertCondition; value: number | null; onConditionChange: (value: AlertCondition) => void; onValueChange: (value: number | null) => void }) {
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(120px,0.45fr)_minmax(180px,1fr)]">
+      <AlertConditionSelect value={condition} onChange={onConditionChange} />
+      <OptionalNumber value={value} onChange={onValueChange} />
+    </div>
+  )
+}
+
+function EditAlertRuleInput({ condition, value, onConditionChange, onValueChange }: { condition: AlertCondition; value: string; onConditionChange: (value: AlertCondition) => void; onValueChange: (value: string) => void }) {
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(120px,0.45fr)_minmax(180px,1fr)]">
+      <AlertConditionSelect value={condition} onChange={onConditionChange} />
+      <EditNumber value={value} onChange={onValueChange} placeholder="disabled" />
+    </div>
+  )
+}
+
+function AlertConditionSelect({ value, onChange }: { value: AlertCondition; onChange: (value: AlertCondition) => void }) {
+  return (
+    <Select className="w-full" value={value} onChange={(event) => onChange(event.target.value as AlertCondition)}>
+      <option value="above">above</option>
+      <option value="below">below</option>
+    </Select>
+  )
+}
+
+function TargetPriceRuleInput({ source, condition, value, onSourceChange, onConditionChange, onValueChange }: { source: TargetPriceSource; condition: AlertCondition; value: number | null; onSourceChange: (value: TargetPriceSource) => void; onConditionChange: (value: AlertCondition) => void; onValueChange: (value: number | null) => void }) {
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(120px,0.7fr)_minmax(120px,0.7fr)_minmax(180px,1fr)]">
+      <TargetPriceSourceSelect value={source} onChange={onSourceChange} />
+      <AlertConditionSelect value={condition} onChange={onConditionChange} />
+      <OptionalPositiveNumber value={value} onChange={onValueChange} />
+    </div>
+  )
+}
+
+function EditTargetPriceRuleInput({ source, condition, value, onSourceChange, onConditionChange, onValueChange }: { source: TargetPriceSource; condition: AlertCondition; value: string; onSourceChange: (value: TargetPriceSource) => void; onConditionChange: (value: AlertCondition) => void; onValueChange: (value: string) => void }) {
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(120px,0.7fr)_minmax(120px,0.7fr)_minmax(180px,1fr)]">
+      <TargetPriceSourceSelect value={source} onChange={onSourceChange} />
+      <AlertConditionSelect value={condition} onChange={onConditionChange} />
+      <EditNumber value={value} onChange={onValueChange} placeholder="disabled" />
+    </div>
+  )
+}
+
+function TargetPriceSourceSelect({ value, onChange }: { value: TargetPriceSource; onChange: (value: TargetPriceSource) => void }) {
+  return (
+    <Select className="w-full" value={value} onChange={(event) => onChange(event.target.value as TargetPriceSource)}>
+      <option value="buy">buy price</option>
+      <option value="sell">sell price</option>
+    </Select>
+  )
+}
+
+function makeEditForm(watch: TradeWatch): TradeWatchEditForm {
   return {
     buy_exchange: watch.buy_exchange,
     sell_exchange: watch.sell_exchange,
-    position_size_coins: watch.position_size_coins === null ? 0 : Number(watch.position_size_coins),
-    price_alert_threshold_percent: watch.price_alert_threshold_percent === null ? null : Number(watch.price_alert_threshold_percent),
-    funding_alert_threshold_percent: watch.funding_alert_threshold_percent === null ? null : Number(watch.funding_alert_threshold_percent),
+    buy_entry_price: watch.buy_entry_price === null ? "" : trimNumericString(watch.buy_entry_price),
+    sell_entry_price: watch.sell_entry_price === null ? "" : trimNumericString(watch.sell_entry_price),
+    position_size_coins: watch.position_size_coins === null ? "" : trimNumericString(watch.position_size_coins),
+    price_alert_threshold_percent: watch.price_alert_threshold_percent === null ? "" : trimNumericString(watch.price_alert_threshold_percent),
+    price_alert_condition: watch.price_alert_condition,
+    funding_alert_threshold_percent: watch.funding_alert_threshold_percent === null ? "" : trimNumericString(watch.funding_alert_threshold_percent),
+    funding_alert_condition: watch.funding_alert_condition,
+    target_price_alert_value: watch.target_price_alert_value === null ? "" : trimNumericString(watch.target_price_alert_value),
+    target_price_alert_condition: watch.target_price_alert_condition,
+    target_price_alert_source: watch.target_price_alert_source,
   }
+}
+
+function buildEditPayload(form: TradeWatchEditForm): TradeWatchUpdate | null {
+  const buyEntryPrice = parsePositiveNumber(form.buy_entry_price)
+  const sellEntryPrice = parsePositiveNumber(form.sell_entry_price)
+  const positionSize = parsePositiveNumber(form.position_size_coins)
+  const priceAlert = parseOptionalNumber(form.price_alert_threshold_percent)
+  const fundingAlert = parseOptionalNumber(form.funding_alert_threshold_percent)
+  const targetPriceAlert = parseOptionalPositiveNumber(form.target_price_alert_value)
+  if (
+    buyEntryPrice === null
+    || sellEntryPrice === null
+    || positionSize === null
+    || priceAlert === undefined
+    || fundingAlert === undefined
+    || targetPriceAlert === undefined
+    || form.buy_exchange === form.sell_exchange
+  ) {
+    return null
+  }
+  return {
+    buy_exchange: form.buy_exchange,
+    sell_exchange: form.sell_exchange,
+    buy_entry_price: buyEntryPrice,
+    sell_entry_price: sellEntryPrice,
+    position_size_coins: positionSize,
+    price_alert_threshold_percent: priceAlert,
+    price_alert_condition: form.price_alert_condition,
+    funding_alert_threshold_percent: fundingAlert,
+    funding_alert_condition: form.funding_alert_condition,
+    target_price_alert_value: targetPriceAlert,
+    target_price_alert_condition: form.target_price_alert_condition,
+    target_price_alert_source: form.target_price_alert_source,
+  }
+}
+
+function parsePositiveNumber(value: string) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function parseOptionalNumber(value: string) {
+  if (value.trim() === "") return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseOptionalPositiveNumber(value: string) {
+  if (value.trim() === "") return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function trimNumericString(value: string) {
+  return Number(value).toString()
 }
 
 function TradeSpreadChart({ data }: { data: Array<{ timestamp: string; spread: number }> }) {
@@ -196,6 +360,16 @@ function spreadTone(value: string | null) {
 
 function formatOptionalSpread(value: string | null) {
   return value === null ? "n/a" : formatSpread(value)
+}
+
+function formatAlertRule(condition: AlertCondition, value: string | null) {
+  return value === null ? "disabled" : `${condition} ${formatSpread(value)}`
+}
+
+function formatTargetPriceRule(watch: TradeWatch) {
+  return watch.target_price_alert_value === null
+    ? "disabled"
+    : `${watch.target_price_alert_source} price ${watch.target_price_alert_condition} ${formatPrice(watch.target_price_alert_value)}`
 }
 
 function Metric({ label, value, accent = false, tone = "neutral" }: { label: string; value: string; accent?: boolean; tone?: "neutral" | "positive" | "negative" }) {

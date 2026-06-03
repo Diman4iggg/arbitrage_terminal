@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -12,8 +13,13 @@ class TradeWatchCreate(BaseModel):
     sell_entry_price: Decimal = Field(gt=0)
     position_size_coins: Decimal = Field(gt=0)
     notifications_enabled: bool = True
-    price_alert_threshold_percent: Decimal | None = Field(default=None, ge=0)
-    funding_alert_threshold_percent: Decimal | None = Field(default=None, ge=0)
+    price_alert_threshold_percent: Decimal | None = None
+    price_alert_condition: Literal["above", "below"] = "above"
+    funding_alert_threshold_percent: Decimal | None = None
+    funding_alert_condition: Literal["above", "below"] = "above"
+    target_price_alert_value: Decimal | None = Field(default=None, gt=0)
+    target_price_alert_condition: Literal["above", "below"] = "above"
+    target_price_alert_source: Literal["buy", "sell"] = "buy"
 
     @field_validator("symbol")
     @classmethod
@@ -33,8 +39,13 @@ class TradeWatchUpdate(BaseModel):
     sell_exchange: str | None = None
     enabled: bool | None = None
     notifications_enabled: bool | None = None
-    price_alert_threshold_percent: Decimal | None = Field(default=None, ge=0)
-    funding_alert_threshold_percent: Decimal | None = Field(default=None, ge=0)
+    price_alert_threshold_percent: Decimal | None = None
+    price_alert_condition: Literal["above", "below"] | None = None
+    funding_alert_threshold_percent: Decimal | None = None
+    funding_alert_condition: Literal["above", "below"] | None = None
+    target_price_alert_value: Decimal | None = Field(default=None, gt=0)
+    target_price_alert_condition: Literal["above", "below"] | None = None
+    target_price_alert_source: Literal["buy", "sell"] | None = None
     buy_entry_price: Decimal | None = Field(default=None, gt=0)
     sell_entry_price: Decimal | None = Field(default=None, gt=0)
     position_size_coins: Decimal | None = Field(default=None, gt=0)
@@ -63,7 +74,12 @@ class TradeWatchRead(BaseModel):
     sell_entry_price: Decimal | None
     position_size_coins: Decimal | None
     price_alert_threshold_percent: Decimal | None
+    price_alert_condition: str
     funding_alert_threshold_percent: Decimal | None
+    funding_alert_condition: str
+    target_price_alert_value: Decimal | None
+    target_price_alert_condition: str
+    target_price_alert_source: str
     buy_price: Decimal | None
     sell_price: Decimal | None
     price_spread_percent: Decimal | None

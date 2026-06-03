@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,19 @@ async def update_pair(
     await session.commit()
     await session.refresh(pair)
     return pair
+
+
+@router.delete("/pairs/{pair_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_pair(
+    pair_id: int,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    pair = await session.get(TradingPair, pair_id)
+    if pair is None:
+        raise HTTPException(status_code=404, detail="Trading pair not found")
+    await session.delete(pair)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/pairs", response_model=TradingPairRead, status_code=status.HTTP_201_CREATED)

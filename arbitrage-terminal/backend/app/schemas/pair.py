@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -31,6 +32,8 @@ class TradingPairCreate(BaseModel):
         symbol = value.strip().upper()
         normalized_symbol = symbol if "/" in symbol else f"{symbol}/USDT"
         base_asset, quote_asset = normalized_symbol.split("/", maxsplit=1)
+        if not re.fullmatch(r"[A-Z0-9]{2,20}", base_asset):
+            raise ValueError("Base asset must contain 2-20 uppercase letters or digits")
         if not base_asset or quote_asset != "USDT":
             raise ValueError("Perpetual monitoring pairs must use a base asset and the USDT quote")
         return normalized_symbol

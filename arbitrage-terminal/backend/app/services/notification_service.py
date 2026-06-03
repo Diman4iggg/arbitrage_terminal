@@ -97,8 +97,10 @@ class NotificationService:
         for reason in pending_reasons:
             spread = (
                 trade_watch.price_spread_percent
-                if reason == "price_spread"
-                else abs(trade_watch.funding_spread_percent or 0)
+                if reason.startswith("price_spread")
+                else _target_price_value(trade_watch)
+                if reason.startswith("target_price")
+                else trade_watch.funding_spread_percent
             )
             self.session.add(
                 NotificationLog(
@@ -128,14 +130,50 @@ class NotificationService:
         if (
             trade_watch.price_alert_threshold_percent is not None
             and trade_watch.price_spread_percent is not None
-            and trade_watch.price_spread_percent >= trade_watch.price_alert_threshold_percent
+            and _matches_alert_condition(
+                current_value=trade_watch.price_spread_percent,
+                threshold=trade_watch.price_alert_threshold_percent,
+                condition=trade_watch.price_alert_condition,
+            )
         ):
-            reasons.append("price_spread")
+            reasons.append(f"price_spread_{trade_watch.price_alert_condition}")
         if (
             trade_watch.funding_alert_threshold_percent is not None
             and trade_watch.funding_spread_percent is not None
-            and abs(trade_watch.funding_spread_percent)
-            >= trade_watch.funding_alert_threshold_percent
+            and _matches_alert_condition(
+                current_value=trade_watch.funding_spread_percent,
+                threshold=trade_watch.funding_alert_threshold_percent,
+                condition=trade_watch.funding_alert_condition,
+            )
         ):
-            reasons.append("funding_spread")
+            reasons.append(f"funding_spread_{trade_watch.funding_alert_condition}")
+        target_price = _target_price_value(trade_watch)
+        if (
+            trade_watch.target_price_alert_value is not None
+            and target_price is not None
+            and _matches_alert_condition(
+                current_value=target_price,
+                threshold=trade_watch.target_price_alert_value,
+                condition=trade_watch.target_price_alert_condition,
+            )
+        ):
+            reasons.append(
+                f"target_price_{trade_watch.target_price_alert_source}_{trade_watch.target_price_alert_condition}"
+            )
         return reasons
+
+
+def _matches_alert_condition(
+    current_value,
+    threshold,
+    condition: str,
+) -> bool:
+    if condition == "below":
+        return current_value <= threshold
+    return current_value >= threshold
+
+
+def _target_price_value(trade_watch: TradeWatch):
+    if trade_watch.target_price_alert_source == "sell":
+        return trade_watch.sell_price
+    return trade_watch.buy_price
